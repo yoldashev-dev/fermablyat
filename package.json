@@ -1,0 +1,18 @@
+{
+  "name": "fermablyat",
+  "version": "1.0.0",
+  "description": "AgroTycoon 3D - High-Fidelity WebGL Farm Simulator",
+  "main": "game.js",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "threejs",
+    "webgl",
+    "game",
+    "farming",
+    "tycoon"
+  ],
+  "author": "yoldashev-dev",
+  "license": "MIT"
+}

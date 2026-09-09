@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgroTycoon 3D: Земля и Техника (RTX Edition)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app-container">
+    <!-- Main Farm Canvas -->
+    <canvas id="farmCanvas"></canvas>
+
+    <!-- Top Status HUD -->
+    <div id="top-bar">
+      <!-- Left: Financial & Farm status -->
+      <div class="hud-card">
+        <div class="stat-item">
+          <span class="stat-icon">💰</span>
+          <span class="stat-value" id="hud-money">$1,000</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-icon">📅</span>
+          <span id="hud-day" style="font-size: 13px;">День 1, Весна</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-icon" id="hud-weather-icon">☀️</span>
+          <span id="hud-weather-text" style="font-size: 12px; color: #f57f17;">Солнечно</span>
+        </div>
+      </div>
+
+      <!-- Center: Warehouse Storage Status -->
+      <div class="hud-card warehouse-indicator" id="btn-open-warehouse" style="cursor: pointer;" title="Нажмите для управления складом">
+        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+          <span>📦 Склад:</span>
+          <span id="hud-wh-text">0 / 250 кг</span>
+        </div>
+        <div class="wh-bar-bg">
+          <div class="wh-bar-fill" id="hud-wh-bar"></div>
+        </div>
+      </div>
+
+      <!-- Right: Main Menu Action Buttons -->
+      <div class="nav-buttons">
+        <button class="hud-btn btn-view-mode" id="btn-toggle-view" title="Вселиться в фермера [V]">👨‍🌾 Фермер [V]</button>
+        <button class="hud-btn btn-rtx active" id="btn-toggle-rtx" title="Переключить RTX освещение">⚡ RTX</button>
+        <button class="hud-btn btn-warehouse" id="btn-nav-warehouse">📦 Склад</button>
+        <button class="hud-btn btn-market" id="btn-nav-market">📈 Биржа</button>
+        <button class="hud-btn btn-machinery" id="btn-nav-machinery">🚜 Техника</button>
+        <button class="hud-btn btn-workers" id="btn-nav-workers">👷 Рабочие</button>
+        <button class="hud-btn btn-land" id="btn-nav-land">🗺️ Земли</button>
+        <button class="hud-btn btn-contracts" id="btn-nav-contracts">📜 Заказы</button>
+        <button class="hud-btn btn-mill" id="btn-nav-mill">🏭 Мельница</button>
+        <button class="hud-btn btn-livestock" id="btn-nav-livestock">🐄 Коровник</button>
+        <button class="hud-btn btn-rivals" id="btn-nav-rivals">🏆 Топ</button>
+      </div>
+    </div>
+
+    <!-- First-Person Reticle / Crosshair -->
+    <div id="fps-crosshair"></div>
+
+    <!-- Dynamic Market News Ticker -->
+    <div id="news-ticker">АгроХолдинг «Заря» продал 80 тонн пшеницы на бирже!</div>
+
+    <!-- Bottom Toolbar & Active Vehicle Banner -->
+    <div id="toolbar-container">
+      <!-- Driving Helper Bar -->
+      <div id="active-vehicle-bar">
+        🚜 Вы за рулём: <span id="driving-vehicle-name">Трактор AgroTrac</span> | ⛽ Топливо: <b id="driving-vehicle-fuel" style="color:#ffd54f;">100%</b> <button id="btn-quick-refuel" style="background:#ff8f00; color:#fff; border:none; padding:2px 8px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px; margin-left:4px;">+Заправить ($40)</button> | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Езда | <kbd>ПРОБЕЛ</kbd> - Плуг/Жатка | <kbd>E</kbd> - Выйти | 🎥 Вид от 3-го лица
+      </div>
+
+      <!-- 3D Camera Controls Hint -->
+      <div id="camera-hint-bar">
+        👨‍🌾 <kbd>Клик по фермеру</kbd> или <kbd>V</kbd> — Вселиться | <kbd>WASD</kbd> Ходьба | <kbd>Shift</kbd> Бег | <kbd>Мышь</kbd> Обзор (без инерции) | <kbd>C</kbd> Вид | <kbd>ЛКМ</kbd> Работа | <kbd>ESC</kbd> Выход
+      </div>
+
+      <!-- Seed Selector Popup -->
+      <div id="seed-selector">
+        <div class="seed-opt selected" data-crop="wheat">
+          <span>🌾 Пшеница</span>
+          <span style="font-size: 9px; color: #666;">Семена: $5</span>
+        </div>
+        <div class="seed-opt" data-crop="corn">
+          <span>🌽 Кукуруза</span>
+          <span style="font-size: 9px; color: #666;">Семена: $12</span>
+        </div>
+        <div class="seed-opt" data-crop="carrot">
+          <span>🥕 Морковь</span>
+          <span style="font-size: 9px; color: #666;">Семена: $20</span>
+        </div>
+        <div class="seed-opt" data-crop="sunflower">
+          <span>🌻 Подсолнух</span>
+          <span style="font-size: 9px; color: #666;">Семена: $35</span>
+        </div>
+      </div>
+
+      <!-- Tool Slots -->
+      <div id="toolbar">
+        <div class="tool-slot active" data-tool="hoe">
+          <span class="tool-key">1</span>
+          <span class="tool-icon">⛏️</span>
+          <span class="tool-name">Мотыга</span>
+        </div>
+        <div class="tool-slot" data-tool="water">
+          <span class="tool-key">2</span>
+          <span class="tool-icon">💧</span>
+          <span class="tool-name">Лейка</span>
+        </div>
+        <div class="tool-slot" data-tool="seed">
+          <span class="tool-key">3</span>
+          <span class="tool-icon">🌱</span>
+          <span class="tool-name">Семена</span>
+        </div>
+        <div class="tool-slot" data-tool="scythe">
+          <span class="tool-key">4</span>
+          <span class="tool-icon">🌾</span>
+          <span class="tool-name">Серп</span>
+        </div>
+        <div class="tool-slot" data-tool="fertilizer">
+          <span class="tool-key">5</span>
+          <span class="tool-icon">✨</span>
+          <span class="tool-name">Удобрение</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 1: MARKET / EXCHANGE -->
+    <div class="modal-overlay" id="modal-market">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>📈 Зерновая биржа и продажа урожая</h2>
+          <button class="close-btn" data-close="modal-market">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Цены меняются в зависимости от рыночного спроса и поставок конкурентов. Продавайте урожай со склада в моменты пиковых цен!
+        </p>
+        <div class="modal-body" id="market-list">
+          <!-- Dynamic crop market cards will be generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 2: MACHINERY DEALERSHIP -->
+    <div class="modal-overlay" id="modal-machinery">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>🚜 Сельхозтехника и автопарк</h2>
+          <button class="close-btn" data-close="modal-machinery">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Купите технику для масштабной обработки полей. Вы можете лично сесть за руль (<kbd>WASD</kbd>) или поручить работу наемному механизатору!
+        </p>
+        <div class="modal-body" id="machinery-list">
+          <!-- Dynamic machinery cards generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 3: WORKERS & HIRING -->
+    <div class="modal-overlay" id="modal-workers">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>👷 Наемные сотрудники фермы</h2>
+          <button class="close-btn" data-close="modal-workers">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Нанимайте рабочих для автоматизации рутины. Зарплата списывается ежедневно из бюджета фермы.
+        </p>
+        <div class="modal-body" id="workers-list">
+          <!-- Dynamic worker cards generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 4: LAND EXPANSION -->
+    <div class="modal-overlay" id="modal-land">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>🗺️ Приобретение земельных участков</h2>
+          <button class="close-btn" data-close="modal-land">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Расширяйте границы своих владений, чтобы засеивать масштабные плантации и задействовать тяжелую технику.
+        </p>
+        <div class="modal-body" id="land-list">
+          <!-- Dynamic land sectors generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 5: RIVALS & LEADERBOARD -->
+    <div class="modal-overlay" id="modal-rivals">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>🏆 Рейтинг агропредприятий региона</h2>
+          <button class="close-btn" data-close="modal-rivals">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Конкуренты также обрабатывают земли и выбрасывают зерно на элеватор, влияя на биржевые цены. Опередите их по капиталу и объему производства!
+        </p>
+        <div class="modal-body">
+          <table class="rival-table">
+            <thead>
+              <tr>
+                <th>Место</th>
+                <th>Предприятие</th>
+                <th>Капитал</th>
+                <th>Земли</th>
+                <th>Собрано урожая</th>
+              </tr>
+            </thead>
+            <tbody id="rivals-tbody">
+              <!-- Rivals rows generated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    
+    <!-- MODAL 7: CONTRACTS -->
+    <div class="modal-overlay" id="modal-contracts">
+      <div class="modal-content" style="max-width: 680px;">
+        <div class="modal-header">
+          <h2>📜 Доска коммерческих контрактов</h2>
+          <button class="close-btn" data-close="modal-contracts">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Выполняйте оптовые госзаказы и поставки для ресторанов и супермаркетов с премией до +50% к рыночной цене! Следите за дедлайном, иначе придется платить неустойку.
+        </p>
+        <div class="modal-body" id="contracts-list">
+          <!-- Dynamic contracts generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 8: WINDMILL & PROCESSING -->
+    <div class="modal-overlay" id="modal-mill">
+      <div class="modal-content" style="max-width: 620px;">
+        <div class="modal-header">
+          <h2>🏭 Ветряная мельница и переработка</h2>
+          <button class="close-btn" data-close="modal-mill">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Перемалывайте собранное зерно в муку! Мука ценится на бирже в 2.5 раза дороже сырой пшеницы и необходима для выполнения ценных контрактов.
+        </p>
+        <div class="modal-body" id="mill-content">
+          <!-- Dynamic mill content generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 9: LIVESTOCK & COWS -->
+    <div class="modal-overlay" id="modal-livestock">
+      <div class="modal-content" style="max-width: 620px;">
+        <div class="modal-header">
+          <h2>🐄 Животноводство и ферма коров</h2>
+          <button class="close-btn" data-close="modal-livestock">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Разводите дойных коров. Они питаются зерном (пшеница/кукуруза), дают свежее дорогое молоко и органический навоз, восстанавливающий истощенную почву на 100%!
+        </p>
+        <div class="modal-body" id="livestock-content">
+          <!-- Dynamic livestock content generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 6: WAREHOUSE & GRAIN ELEVATOR -->
+    <div class="modal-overlay" id="modal-warehouse">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>📦 Зернохранилище и Элеватор</h2>
+          <button class="close-btn" data-close="modal-warehouse">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #616161;">
+          Храните собранный урожай в элеваторе и модернизируйте склад, чтобы вмещать тонны зерна для продажи по выгодным биржевым ценам!
+        </p>
+        <div class="modal-body">
+          <div id="warehouse-detail-content"></div>
+          <h3 style="margin: 14px 0 8px; font-size: 15px; color: #3e2723;">🏗️ Проекты расширения элеватора:</h3>
+          <div id="warehouse-upgrades-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D Engine & Scripts -->
+  <script src="libs/three.min.js"></script>
+  <script src="libs/OrbitControls.js"></script>
+  <script src="audio.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
