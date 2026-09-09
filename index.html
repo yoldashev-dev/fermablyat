@@ -2,7 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f19">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AgroTycoon 3D: Земля и Техника (RTX Edition)</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -66,7 +70,7 @@
     <div id="toolbar-container">
       <!-- Driving Helper Bar -->
       <div id="active-vehicle-bar">
-        🚜 Вы за рулём: <span id="driving-vehicle-name">Трактор AgroTrac</span> | ⛽ Топливо: <b id="driving-vehicle-fuel" style="color:#ffd54f;">100%</b> <button id="btn-quick-refuel" style="background:#ff8f00; color:#fff; border:none; padding:2px 8px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px; margin-left:4px;">+Заправить ($40)</button> | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Езда | <kbd>ПРОБЕЛ</kbd> - Плуг/Жатка | <kbd>E</kbd> - Выйти | 🎥 Вид от 3-го лица
+        🚜 Вы за рулём: <span id="driving-vehicle-name">Трактор AgroTrac</span> | ⛽ Топливо: <b id="driving-vehicle-fuel" style="color:#ffd54f;">100%</b> <button id="btn-quick-refuel" style="background:#ff8f00; color:#fff; border:none; padding:2px 8px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px; margin-left:4px;">+Заправить ($40)</button> <button id="btn-quick-exit-vehicle" style="background:#d32f2f; color:#fff; border:none; padding:2px 8px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px; margin-left:4px;">🚪 Выйти</button> | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Езда | <kbd>ПРОБЕЛ</kbd> - Плуг/Жатка | <kbd>E</kbd> - Выйти | 🎥 Вид от 3-го лица
       </div>
 
       <!-- 3D Camera Controls Hint -->
@@ -284,6 +288,30 @@
           <div id="warehouse-detail-content"></div>
           <h3 style="margin: 14px 0 8px; font-size: 15px; color: #3e2723;">🏗️ Проекты расширения элеватора:</h3>
           <div id="warehouse-upgrades-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile On-Screen Virtual Controls Overlay -->
+    <div id="mobile-controls">
+      <!-- Left: Dynamic Virtual Joystick -->
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <div id="joystick-knob"></div>
+        </div>
+      </div>
+
+      <!-- Right: Touch Look Gesture Zone -->
+      <div id="touch-look-zone"></div>
+
+      <!-- Right: Floating Action Buttons -->
+      <div id="mobile-action-buttons">
+        <button id="btn-touch-action" class="touch-btn touch-btn-primary" title="Действие / Мотыга / Сбор">⛏️</button>
+        <div class="touch-sub-row">
+          <button id="btn-touch-sprint" class="touch-btn touch-btn-secondary" title="Бег / Шаг">🏃</button>
+          <button id="btn-touch-cam" class="touch-btn touch-btn-secondary" title="Вид камеры">👁️</button>
+          <button id="btn-touch-vehicle" class="touch-btn touch-btn-secondary" title="Транспорт" style="display:none;">🚜</button>
+          <button id="btn-touch-exit" class="touch-btn touch-btn-secondary" title="Выход из режима" style="display:none;">🚪</button>
         </div>
       </div>
     </div>

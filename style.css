@@ -37,6 +37,7 @@ canvas#farmCanvas {
   height: 100%;
   z-index: 1;
   display: block;
+  touch-action: none;
 }
 
 /* =========================================================
@@ -656,4 +657,403 @@ canvas#farmCanvas {
   pointer-events: none;
   box-shadow: 0 0 6px rgba(0,0,0,0.9);
   border: 1px solid rgba(0,0,0,0.6);
+}
+
+/* =========================================================
+   MOBILE TOUCH CONTROLS & VIRTUAL JOYSTICK
+   ========================================================= */
+#mobile-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 35;
+  pointer-events: none;
+  display: none; /* Managed by JS (isMobile) and media queries */
+}
+
+/* Virtual Joystick on Bottom-Left */
+#joystick-zone {
+  position: absolute;
+  left: 14px;
+  bottom: calc(75px + env(safe-area-inset-bottom, 0px));
+  width: 120px;
+  height: 120px;
+  pointer-events: auto;
+  touch-action: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#joystick-base {
+  width: 106px;
+  height: 106px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.65);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45), inset 0 0 16px rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  transition: border-color 0.2s;
+}
+
+#joystick-knob {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #34d399, #059669);
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.6);
+  position: absolute;
+  pointer-events: none;
+  will-change: transform;
+}
+
+#joystick-knob.active {
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.95);
+  border-color: #ffffff;
+}
+
+/* Touch Look Zone on Right Half */
+#touch-look-zone {
+  position: absolute;
+  top: 60px;
+  right: 0;
+  width: 55vw;
+  height: calc(100vh - 140px);
+  pointer-events: none; /* enabled in FPS mode */
+  touch-action: none;
+  z-index: 36;
+}
+
+/* Mobile Action Buttons Group on Bottom-Right */
+#mobile-action-buttons {
+  position: absolute;
+  right: 14px;
+  bottom: calc(75px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: auto;
+  z-index: 38;
+}
+
+.touch-sub-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.touch-btn {
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+}
+
+.touch-btn:active {
+  transform: scale(0.9);
+}
+
+.touch-btn-primary {
+  width: 58px;
+  height: 58px;
+  font-size: 26px;
+  background: linear-gradient(135deg, #10b981, #047857);
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.55);
+  color: #fff;
+}
+
+.touch-btn-secondary {
+  width: 42px;
+  height: 42px;
+  font-size: 18px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  color: #f1f5f9;
+}
+
+.touch-btn-secondary.active {
+  background: rgba(16, 185, 129, 0.35);
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+}
+
+/* Fast tap response (eliminates 300ms touch delay) */
+button, .tool-slot, .seed-opt, .hud-btn, .touch-btn, .close-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* =========================================================
+   RESPONSIVE ADAPTATIONS (MOBILE PHONES & TABLETS)
+   ========================================================= */
+@media (max-width: 820px) {
+  #top-bar {
+    top: calc(6px + env(safe-area-inset-top, 0px));
+    left: calc(6px + env(safe-area-inset-left, 0px));
+    right: calc(6px + env(safe-area-inset-right, 0px));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .hud-card {
+    padding: 5px 10px;
+    font-size: 11px;
+    gap: 8px;
+    border-radius: 8px;
+  }
+
+  .stat-item {
+    gap: 4px;
+  }
+
+  .stat-icon {
+    font-size: 14px;
+  }
+
+  .stat-value {
+    font-size: 13px;
+  }
+
+  .warehouse-indicator {
+    min-width: 105px;
+    padding: 5px 8px;
+  }
+
+  .wh-bar-bg {
+    height: 5px;
+  }
+
+  .nav-buttons {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    gap: 5px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    justify-content: flex-start;
+  }
+  .nav-buttons::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hud-btn {
+    padding: 5px 9px;
+    font-size: 10.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    border-radius: 6px;
+  }
+
+  #news-ticker {
+    top: calc(76px + env(safe-area-inset-top, 0px));
+    font-size: 11px;
+    padding: 4px 12px;
+    max-width: 92vw;
+  }
+
+  /* Bottom Toolbar Adjustments */
+  #toolbar-container {
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    gap: 4px;
+    max-width: 98vw;
+  }
+
+  #camera-hint-bar {
+    display: none !important; /* Keyboard hints hidden on mobile */
+  }
+
+  #active-vehicle-bar {
+    font-size: 11px;
+    padding: 5px 10px;
+    max-width: 95vw;
+    border-radius: 8px;
+  }
+
+  #toolbar {
+    padding: 3px 5px;
+    gap: 4px;
+    border-radius: 10px;
+  }
+
+  .tool-slot {
+    padding: 5px 8px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 8px;
+  }
+
+  .tool-icon {
+    font-size: 18px;
+  }
+
+  .tool-name {
+    font-size: 9.5px;
+  }
+
+  .tool-key {
+    display: none;
+  }
+
+  #seed-selector {
+    max-width: 95vw;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 4px;
+    padding: 4px;
+    scrollbar-width: none;
+  }
+  #seed-selector::-webkit-scrollbar {
+    display: none;
+  }
+
+  .seed-opt {
+    padding: 5px 8px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  /* Modals on Mobile */
+  .modal-overlay {
+    padding: 8px;
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 88vh !important;
+    border-radius: 16px 16px 8px 8px !important;
+    padding: 16px 12px !important;
+  }
+
+  .modal-header h2 {
+    font-size: 15px;
+  }
+
+  .close-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .market-grid, .machinery-grid, .workers-grid, .land-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+
+  .process-box {
+    padding: 12px;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .rival-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 11px;
+  }
+
+  .rival-table th, .rival-table td {
+    padding: 6px 8px;
+  }
+
+  #fps-crosshair {
+    width: 8px;
+    height: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    background: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+  }
+}
+
+@media (max-width: 520px) {
+  #top-bar {
+    gap: 4px;
+  }
+
+  .hud-card {
+    padding: 4px 7px;
+    font-size: 10px;
+    gap: 6px;
+  }
+
+  .stat-value {
+    font-size: 12px;
+  }
+
+  .warehouse-indicator {
+    min-width: 90px;
+  }
+
+  .hud-btn {
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  #joystick-zone {
+    left: 8px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    width: 100px;
+    height: 100px;
+  }
+
+  #joystick-base {
+    width: 92px;
+    height: 92px;
+  }
+
+  #joystick-knob {
+    width: 38px;
+    height: 38px;
+  }
+
+  #mobile-action-buttons {
+    right: 8px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
+  }
+
+  .touch-btn-primary {
+    width: 52px;
+    height: 52px;
+    font-size: 23px;
+  }
+
+  .touch-btn-secondary {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
+
+  .tool-slot {
+    padding: 4px 6px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .tool-icon {
+    font-size: 16px;
+  }
 }

@@ -36,7 +36,32 @@
     btnNavWarehouse: document.getElementById('btn-nav-warehouse'),
     btnToggleRtx: document.getElementById('btn-toggle-rtx'),
     btnToggleView: document.getElementById('btn-toggle-view'),
-    fpsCrosshair: document.getElementById('fps-crosshair')
+    fpsCrosshair: document.getElementById('fps-crosshair'),
+    mobileControls: document.getElementById('mobile-controls'),
+    joystickZone: document.getElementById('joystick-zone'),
+    joystickBase: document.getElementById('joystick-base'),
+    joystickKnob: document.getElementById('joystick-knob'),
+    touchLookZone: document.getElementById('touch-look-zone'),
+    btnTouchAction: document.getElementById('btn-touch-action'),
+    btnTouchSprint: document.getElementById('btn-touch-sprint'),
+    btnTouchCam: document.getElementById('btn-touch-cam'),
+    btnTouchVehicle: document.getElementById('btn-touch-vehicle'),
+    btnTouchExit: document.getElementById('btn-touch-exit'),
+    btnQuickExitVehicle: document.getElementById('btn-quick-exit-vehicle')
+  };
+
+  // --- MOBILE DEVICE DETECTION & OPTIMIZATIONS ---
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || ('ontouchstart' in window)
+    || (navigator.maxTouchPoints > 0)
+    || (window.innerWidth <= 820);
+
+  // Touch input state for virtual joystick and buttons
+  const touchInput = {
+    active: false,
+    moveX: 0,
+    moveZ: 0,
+    isSprinting: false
   };
 
   // --- THREE.JS INITIALIZATION ---
@@ -46,7 +71,7 @@
     powerPreference: 'high-performance'
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2.0));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -72,6 +97,7 @@
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2.0));
   });
 
 
@@ -86,8 +112,8 @@
   const sunLight = new THREE.DirectionalLight(0xfffaed, 1.35);
   sunLight.position.set(100, 160, 90);
   sunLight.castShadow = true;
-  sunLight.shadow.mapSize.width = 2048;
-  sunLight.shadow.mapSize.height = 2048;
+  sunLight.shadow.mapSize.width = isMobile ? 1024 : 2048;
+  sunLight.shadow.mapSize.height = isMobile ? 1024 : 2048;
   sunLight.shadow.camera.near = 10;
   sunLight.shadow.camera.far = 450;
   const shadowRange = 110;
@@ -1334,6 +1360,13 @@
         if (keys['a'] || keys['keya'] || keys['ф'] || keys['arrowleft']) turn += 1; // Steer Left on screen
         if (keys['d'] || keys['keyd'] || keys['в'] || keys['arrowright']) turn -= 1; // Steer Right on screen
 
+        if (touchInput.active) {
+          forward += touchInput.moveZ;
+          turn -= touchInput.moveX;
+        }
+        forward = Math.max(-1, Math.min(1, forward));
+        turn = Math.max(-1, Math.min(1, turn));
+
         this.angle += turn * this.def.turnSpeed * dt;
 
         const targetSpeed = forward * this.def.speed;
@@ -1965,7 +1998,14 @@
         if (keys['a'] || keys['keya'] || keys['ф'] || keys['arrowleft']) s -= 1;
         if (keys['d'] || keys['keyd'] || keys['в'] || keys['arrowright']) s += 1;
 
-        const isShift = keys['shift'] || keys['shiftleft'] || keys['shiftright'];
+        if (touchInput.active) {
+          f += touchInput.moveZ;
+          s += touchInput.moveX;
+        }
+        f = Math.max(-1, Math.min(1, f));
+        s = Math.max(-1, Math.min(1, s));
+
+        const isShift = keys['shift'] || keys['shiftleft'] || keys['shiftright'] || touchInput.isSprinting;
         const moveSpeed = (isShift ? 13.5 : 7.0) * dt;
 
         this.isWalking = (f !== 0 || s !== 0);
@@ -2355,49 +2395,65 @@
     }
   });
 
+  function triggerPrimaryAction() {
+    if (farm.drivingVehicle) return;
+
+    if (farm.viewMode === 'FPS') {
+      // Trigger tool swing animation on the farmer's hands
+      playerFarmer.triggerSwing();
+
+      // Raycast forward from camera center
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+      // Check if aiming at vehicle to enter it
+      for (const v of ownedVehicles) {
+        const dist = raycaster.ray.distanceToPoint(new THREE.Vector3(v.x, 1.5, v.z));
+        if (dist < 3.8) {
+          enterVehicle(v);
+          return;
+        }
+      }
+
+      // Check if aiming at Mill or Cow Barn
+      if (raycaster.ray.distanceToPoint(new THREE.Vector3(32, 6, 12)) < 8.0) {
+        updateMillUI();
+        openModal(document.getElementById('modal-mill'));
+        return;
+      }
+      if (raycaster.ray.distanceToPoint(new THREE.Vector3(8, 3, 32)) < 9.0) {
+        updateLivestockUI();
+        openModal(document.getElementById('modal-livestock'));
+        return;
+      }
+
+      // Interact with field tile under crosshair
+      const intersects = raycaster.intersectObjects(terrainGroup.children);
+      if (intersects.length > 0 && intersects[0].distance < 8.5) {
+        const hit = intersects[0].object;
+        if (hit.userData && hit.userData.c !== undefined) {
+          handleTileInteraction(hit.userData.c, hit.userData.r);
+          return;
+        }
+      }
+
+      // Mobile touch fallback: interact directly with tile in front of the farmer
+      const frontC = Math.floor((playerFarmer.x - Math.sin(fpsControls.yaw) * 1.5) / TILE_SIZE);
+      const frontR = Math.floor((playerFarmer.z - Math.cos(fpsControls.yaw) * 1.5) / TILE_SIZE);
+      if (frontC >= 0 && frontC < GRID_COLS && frontR >= 0 && frontR < GRID_ROWS) {
+        handleTileInteraction(frontC, frontR);
+      }
+      return;
+    }
+  }
+
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button === 0) { // Left Mouse Click
       if (farm.viewMode === 'FPS') {
-        if (!fpsControls.isLocked) {
-          canvas.requestPointerLock();
+        if (!fpsControls.isLocked && !isMobile) {
+          try { canvas.requestPointerLock(); } catch(err) {}
           return;
         }
-
-        // Trigger tool swing animation on the farmer's hands
-        playerFarmer.triggerSwing();
-
-        // Raycast forward from camera center
-        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-
-        // Check if aiming at vehicle to enter it
-        for (const v of ownedVehicles) {
-          const dist = raycaster.ray.distanceToPoint(new THREE.Vector3(v.x, 1.5, v.z));
-          if (dist < 3.5) {
-            enterVehicle(v);
-            return;
-          }
-        }
-
-        // Check if aiming at Mill or Cow Barn
-        if (raycaster.ray.distanceToPoint(new THREE.Vector3(32, 6, 12)) < 8.0) {
-          updateMillUI();
-          openModal(document.getElementById('modal-mill'));
-          return;
-        }
-        if (raycaster.ray.distanceToPoint(new THREE.Vector3(8, 3, 32)) < 9.0) {
-          updateLivestockUI();
-          openModal(document.getElementById('modal-livestock'));
-          return;
-        }
-
-        // Interact with field tile under crosshair
-        const intersects = raycaster.intersectObjects(terrainGroup.children);
-        if (intersects.length > 0 && intersects[0].distance < 8.5) {
-          const hit = intersects[0].object;
-          if (hit.userData && hit.userData.c !== undefined) {
-            handleTileInteraction(hit.userData.c, hit.userData.r);
-          }
-        }
+        triggerPrimaryAction();
         return;
       }
 
@@ -2581,9 +2637,14 @@
     fpsControls.pitch = -0.12;
 
     playerFarmer.setPerspective('first');
-    canvas.requestPointerLock();
+    if (!isMobile) {
+      try { canvas.requestPointerLock(); } catch(e) {}
+    } else {
+      fpsControls.isLocked = true;
+    }
 
-    showFloat('🚶 Вы вселились в фермера! WASD — ходьба, ЛКМ — работа, C — вид от 3-го лица, V/ESC — выход.', window.innerWidth / 2, 80, '#00e676');
+    showFloat('🚶 Вы вселились в фермера! Джойстик — ходьба, правая часть — обзор, ⛏️ — работа.', window.innerWidth / 2, 80, '#00e676');
+    updateMobileControlsUI();
   }
 
   function exitFarmerMode() {
@@ -2604,6 +2665,7 @@
     controls.update();
 
     showFloat('🛰️ Режим стратегии. Кликните по фермеру, чтобы снова управлять им!', window.innerWidth / 2, 80, '#29b6f6');
+    updateMobileControlsUI();
   }
 
   function toggleViewMode() {
@@ -2614,25 +2676,318 @@
   if (hud.btnToggleView) hud.btnToggleView.addEventListener('click', toggleViewMode);
 
   function enterVehicle(v) {
-    if (farm.viewMode === 'FPS') document.exitPointerLock();
+    if (farm.viewMode === 'FPS') {
+      try { if (document.exitPointerLock) document.exitPointerLock(); } catch(e) {}
+    }
 
     farm.drivingVehicle = v;
     hud.activeVehicleBar.style.display = 'block';
     hud.drivingVehicleName.innerText = v.def.name;
     cursorMesh.visible = false;
     controls.enabled = false; // Chase camera takes over
+    updateMobileControlsUI();
   }
 
   function exitVehicle() {
     farm.drivingVehicle = null;
     hud.activeVehicleBar.style.display = 'none';
-    controls.enabled = true; // RTS free camera returns
+    controls.enabled = (farm.viewMode === 'RTS');
+    updateMobileControlsUI();
   }
 
 
   // --- MODAL DIALOGS & ECONOMY HANDLERS ---
   function openModal(el) { if(farm.viewMode==='FPS') document.exitPointerLock();  el.style.display = 'flex'; }
   function closeModal(el) { if(farm.viewMode==='FPS') canvas.requestPointerLock();  el.style.display = 'none'; }
+
+  // =========================================================
+  // MOBILE TOUCH CONTROLS & VIRTUAL JOYSTICK IMPLEMENTATION
+  // =========================================================
+  function updateMobileControlsUI() {
+    if (!hud.mobileControls) return;
+
+    if (farm.drivingVehicle) {
+      if (hud.btnTouchVehicle) {
+        hud.btnTouchVehicle.style.display = 'flex';
+        hud.btnTouchVehicle.innerHTML = '🚪';
+        hud.btnTouchVehicle.title = 'Выйти из техники';
+      }
+      if (hud.btnTouchExit) hud.btnTouchExit.style.display = 'flex';
+      if (hud.btnTouchCam) hud.btnTouchCam.style.display = 'none';
+      if (hud.btnTouchAction) hud.btnTouchAction.style.display = 'none';
+      if (hud.touchLookZone) hud.touchLookZone.style.pointerEvents = 'none';
+    } else if (farm.viewMode === 'FPS') {
+      let nearVehicle = null;
+      for (const v of ownedVehicles) {
+        if (Math.hypot(playerFarmer.x - v.x, playerFarmer.z - v.z) < 3.8) {
+          nearVehicle = v;
+          break;
+        }
+      }
+      if (hud.btnTouchVehicle) {
+        if (nearVehicle) {
+          hud.btnTouchVehicle.style.display = 'flex';
+          hud.btnTouchVehicle.innerHTML = '🚜';
+          hud.btnTouchVehicle.title = 'Сесть за руль';
+        } else {
+          hud.btnTouchVehicle.style.display = 'none';
+        }
+      }
+      if (hud.btnTouchExit) hud.btnTouchExit.style.display = 'flex';
+      if (hud.btnTouchCam) {
+        hud.btnTouchCam.style.display = 'flex';
+        hud.btnTouchCam.innerHTML = playerFarmer.viewPerspective === 'first' ? '👁️' : '👤';
+      }
+      if (hud.btnTouchAction) hud.btnTouchAction.style.display = 'flex';
+      if (hud.touchLookZone) hud.touchLookZone.style.pointerEvents = 'auto';
+    } else {
+      // RTS mode
+      if (hud.btnTouchVehicle) hud.btnTouchVehicle.style.display = 'none';
+      if (hud.btnTouchExit) hud.btnTouchExit.style.display = 'none';
+      if (hud.btnTouchCam) {
+        hud.btnTouchCam.style.display = 'flex';
+        hud.btnTouchCam.innerHTML = '👨‍🌾';
+        hud.btnTouchCam.title = 'Вселиться в фермера';
+      }
+      if (hud.btnTouchAction) hud.btnTouchAction.style.display = 'none';
+      if (hud.touchLookZone) hud.touchLookZone.style.pointerEvents = 'none';
+    }
+  }
+
+  // Display mobile controls if mobile device or touch detected
+  if (isMobile && hud.mobileControls) {
+    hud.mobileControls.style.display = 'block';
+  }
+  window.addEventListener('touchstart', () => {
+    if (hud.mobileControls) hud.mobileControls.style.display = 'block';
+  }, { once: true });
+
+  // Virtual Joystick Logic
+  if (hud.joystickZone && hud.joystickKnob && hud.joystickBase) {
+    let joystickTouchId = null;
+    let joystickCenter = { x: 0, y: 0 };
+    const maxRadius = 40;
+
+    function handleJoystickMove(clientX, clientY) {
+      let dx = clientX - joystickCenter.x;
+      let dy = clientY - joystickCenter.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > maxRadius) {
+        dx = (dx / dist) * maxRadius;
+        dy = (dy / dist) * maxRadius;
+      }
+
+      hud.joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+      hud.joystickKnob.classList.add('active');
+
+      const deadZone = 5;
+      if (dist < deadZone) {
+        touchInput.active = false;
+        touchInput.moveX = 0;
+        touchInput.moveZ = 0;
+      } else {
+        touchInput.active = true;
+        touchInput.moveX = dx / maxRadius;  // -1 to 1 (left to right)
+        touchInput.moveZ = -dy / maxRadius; // -1 to 1 (backward to forward)
+      }
+    }
+
+    function resetJoystick() {
+      joystickTouchId = null;
+      touchInput.active = false;
+      touchInput.moveX = 0;
+      touchInput.moveZ = 0;
+      hud.joystickKnob.style.transform = 'translate(0px, 0px)';
+      hud.joystickKnob.classList.remove('active');
+    }
+
+    hud.joystickZone.addEventListener('touchstart', (e) => {
+      if (joystickTouchId !== null) return;
+      const touch = e.changedTouches[0];
+      joystickTouchId = touch.identifier;
+
+      const rect = hud.joystickBase.getBoundingClientRect();
+      joystickCenter = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+
+      handleJoystickMove(touch.clientX, touch.clientY);
+      e.preventDefault();
+    }, { passive: false });
+
+    hud.joystickZone.addEventListener('touchmove', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === joystickTouchId) {
+          handleJoystickMove(touch.clientX, touch.clientY);
+          e.preventDefault();
+          break;
+        }
+      }
+    }, { passive: false });
+
+    hud.joystickZone.addEventListener('touchend', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === joystickTouchId) {
+          resetJoystick();
+          e.preventDefault();
+          break;
+        }
+      }
+    }, { passive: false });
+
+    hud.joystickZone.addEventListener('touchcancel', resetJoystick, { passive: false });
+  }
+
+  // Touch Look Zone on Right Half (FPS Camera Control)
+  if (hud.touchLookZone) {
+    let lookTouchId = null;
+    let lastLookX = 0;
+    let lastLookY = 0;
+    let lookStartTime = 0;
+    let lookTotalDist = 0;
+
+    hud.touchLookZone.addEventListener('touchstart', (e) => {
+      if (farm.viewMode !== 'FPS') return;
+      if (lookTouchId !== null) return;
+      const touch = e.changedTouches[0];
+      lookTouchId = touch.identifier;
+      lastLookX = touch.clientX;
+      lastLookY = touch.clientY;
+      lookStartTime = performance.now();
+      lookTotalDist = 0;
+      e.preventDefault();
+    }, { passive: false });
+
+    hud.touchLookZone.addEventListener('touchmove', (e) => {
+      if (farm.viewMode !== 'FPS') return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === lookTouchId) {
+          const deltaX = touch.clientX - lastLookX;
+          const deltaY = touch.clientY - lastLookY;
+          lastLookX = touch.clientX;
+          lastLookY = touch.clientY;
+          lookTotalDist += Math.hypot(deltaX, deltaY);
+
+          const sensitivity = 0.0055;
+          fpsControls.yaw -= deltaX * sensitivity;
+          fpsControls.pitch -= deltaY * sensitivity;
+          fpsControls.pitch = Math.max(-Math.PI / 2 + 0.08, Math.min(Math.PI / 2 - 0.08, fpsControls.pitch));
+          e.preventDefault();
+          break;
+        }
+      }
+    }, { passive: false });
+
+    hud.touchLookZone.addEventListener('touchend', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === lookTouchId) {
+          lookTouchId = null;
+          // Quick tap triggers primary action
+          if (lookTotalDist < 12 && (performance.now() - lookStartTime) < 260) {
+            triggerPrimaryAction();
+          }
+          e.preventDefault();
+          break;
+        }
+      }
+    }, { passive: false });
+
+    hud.touchLookZone.addEventListener('touchcancel', () => {
+      lookTouchId = null;
+    }, { passive: false });
+  }
+
+  // Mobile Action Buttons Handlers
+  if (hud.btnTouchAction) {
+    hud.btnTouchAction.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      triggerPrimaryAction();
+    }, { passive: false });
+    hud.btnTouchAction.addEventListener('click', () => {
+      triggerPrimaryAction();
+    });
+  }
+
+  if (hud.btnTouchSprint) {
+    function toggleSprint() {
+      touchInput.isSprinting = !touchInput.isSprinting;
+      hud.btnTouchSprint.classList.toggle('active', touchInput.isSprinting);
+      showFloat(touchInput.isSprinting ? '🏃 Бег активирован' : '🚶 Шаг', window.innerWidth / 2, 80);
+    }
+    hud.btnTouchSprint.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      toggleSprint();
+    }, { passive: false });
+    hud.btnTouchSprint.addEventListener('click', toggleSprint);
+  }
+
+  if (hud.btnTouchCam) {
+    function handleTouchCam() {
+      if (farm.viewMode === 'FPS') {
+        const nextMode = playerFarmer.viewPerspective === 'first' ? 'third' : 'first';
+        playerFarmer.setPerspective(nextMode);
+        updateMobileControlsUI();
+        showFloat(nextMode === 'first' ? '👁️ Вид из глаз' : '👤 Вид со спины', window.innerWidth / 2, 80);
+      } else {
+        enterFarmerMode();
+      }
+    }
+    hud.btnTouchCam.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      handleTouchCam();
+    }, { passive: false });
+    hud.btnTouchCam.addEventListener('click', handleTouchCam);
+  }
+
+  if (hud.btnTouchVehicle) {
+    function handleTouchVehicle() {
+      if (farm.drivingVehicle) {
+        exitVehicle();
+      } else {
+        let nearVehicle = null;
+        for (const v of ownedVehicles) {
+          if (Math.hypot(playerFarmer.x - v.x, playerFarmer.z - v.z) < 3.8) {
+            nearVehicle = v;
+            break;
+          }
+        }
+        if (nearVehicle) enterVehicle(nearVehicle);
+      }
+    }
+    hud.btnTouchVehicle.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      handleTouchVehicle();
+    }, { passive: false });
+    hud.btnTouchVehicle.addEventListener('click', handleTouchVehicle);
+  }
+
+  if (hud.btnTouchExit) {
+    function handleTouchExit() {
+      if (farm.drivingVehicle) exitVehicle();
+      else if (farm.viewMode === 'FPS') exitFarmerMode();
+    }
+    hud.btnTouchExit.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      handleTouchExit();
+    }, { passive: false });
+    hud.btnTouchExit.addEventListener('click', handleTouchExit);
+  }
+
+  if (hud.btnQuickExitVehicle) {
+    hud.btnQuickExitVehicle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      exitVehicle();
+    });
+  }
+
+  // Periodic UI update for mobile buttons
+  setInterval(updateMobileControlsUI, 600);
+
 
   document.querySelectorAll('.close-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3456,6 +3811,11 @@
       if (keys['s'] || keys['keys'] || keys['ы'] || keys['arrowdown']) panZ += 1;
       if (keys['a'] || keys['keya'] || keys['ф'] || keys['arrowleft']) panX -= 1;
       if (keys['d'] || keys['keyd'] || keys['в'] || keys['arrowright']) panX += 1;
+
+      if (touchInput.active && farm.viewMode === 'RTS' && !farm.drivingVehicle) {
+        panZ -= touchInput.moveZ;
+        panX += touchInput.moveX;
+      }
 
       if (panX !== 0 || panZ !== 0) {
         const isShift = keys['shift'] || keys['shiftleft'] || keys['shiftright'];
