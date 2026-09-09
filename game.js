@@ -526,6 +526,71 @@
     return group;
   }
 
+  // --- SOLID 3D COLLISION DETECTION SYSTEM ---
+  const WORLD_OBSTACLES = [
+    // Main Farmhouse Barn (origin 10, 10, size 12 x 8.5)
+    { type: 'box', minX: 3.8, maxX: 16.2, minZ: 5.6, maxZ: 14.4, name: 'farmhouse' },
+
+    // Grain Silo (origin 19.5, 10, radius 2.2)
+    { type: 'circle', x: 19.5, z: 10.0, radius: 2.3, name: 'silo' },
+
+    // Garden Apple Tree (origin 2, 10)
+    { type: 'circle', x: 2.0, z: 10.0, radius: 0.8, name: 'orchard_tree' },
+
+    // Scenic Windmill (origin 32, 12, stone base radius 4.8)
+    { type: 'circle', x: 32.0, z: 12.0, radius: 4.8, name: 'windmill' },
+
+    // Cow Pasture Shelter Shed (pasture origin 8, 32; shed local 0, -4.5, size 9 x 4.5)
+    // world X: [3.5, 12.5], world Z: [25.25, 29.75]
+    { type: 'box', minX: 3.4, maxX: 12.6, minZ: 25.1, maxZ: 29.8, name: 'cow_shed' },
+
+    // Cow Pasture Solid Fences (world coordinates)
+    // Left fence (x = 2.0, z: 27.5 to 37.5)
+    { type: 'box', minX: 1.8, maxX: 2.2, minZ: 27.3, maxZ: 37.7, name: 'cow_fence_left' },
+
+    // Right fence (x = 14.0, z: 27.5 to 37.5)
+    { type: 'box', minX: 13.8, maxX: 14.2, minZ: 27.3, maxZ: 37.7, name: 'cow_fence_right' },
+
+    // Back-left wing (x: 2.0 to 3.5, z = 27.5)
+    { type: 'box', minX: 1.8, maxX: 3.5, minZ: 27.3, maxZ: 27.7, name: 'cow_fence_back_l' },
+
+    // Back-right wing (x: 12.5 to 14.0, z = 27.5)
+    { type: 'box', minX: 12.5, maxX: 14.2, minZ: 27.3, maxZ: 27.7, name: 'cow_fence_back_r' },
+
+    // Front-left fence (x: 2.0 to 6.7, z = 37.5)
+    { type: 'box', minX: 1.8, maxX: 6.7, minZ: 37.3, maxZ: 37.7, name: 'cow_fence_front_l' },
+
+    // Front-right fence (x: 9.3 to 14.0, z = 37.5)
+    // Note: Gate opening is between 6.7 and 9.3 (width 2.6m) - free passage for player!
+    { type: 'box', minX: 9.3, maxX: 14.2, minZ: 37.3, maxZ: 37.7, name: 'cow_fence_front_r' },
+
+    // Cow Feeding Trough inside pasture (world x: 8, z: 31, size 3.4 x 1.0)
+    { type: 'box', minX: 6.3, maxX: 9.7, minZ: 30.5, maxZ: 31.5, name: 'cow_trough' }
+  ];
+
+  function checkWorldCollision(px, pz, radius = 0.45) {
+    for (let i = 0; i < WORLD_OBSTACLES.length; i++) {
+      const obs = WORLD_OBSTACLES[i];
+      if (obs.type === 'box') {
+        const closestX = Math.max(obs.minX, Math.min(px, obs.maxX));
+        const closestZ = Math.max(obs.minZ, Math.min(pz, obs.maxZ));
+        const dx = px - closestX;
+        const dz = pz - closestZ;
+        if (dx * dx + dz * dz < radius * radius) {
+          return true;
+        }
+      } else if (obs.type === 'circle') {
+        const dx = px - obs.x;
+        const dz = pz - obs.z;
+        const combinedRadius = radius + obs.radius;
+        if (dx * dx + dz * dz < combinedRadius * combinedRadius) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   function buildSpecialStructures() {
     // 1. WINDMILL: Positioned on open scenic hillock at (x: 32, z: 12)
     const millGroup = new THREE.Group();
@@ -594,24 +659,135 @@
     shedRoof.position.set(0, 4.5, -4.5);
     pastureGroup.add(shedRoof);
 
-    // Fences around pasture
+    // Complete Fences around pasture & Feeding Troughs
     const fenceMat = materials.wood;
-    const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.4, 6);
-    const railXGeo = new THREE.BoxGeometry(3.8, 0.1, 0.1);
-    const railZGeo = new THREE.BoxGeometry(0.1, 0.1, 3.8);
+    const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.4, 8);
 
-    for (let fx = -6; fx <= 6; fx += 4) {
-      const pFront = new THREE.Mesh(postGeo, fenceMat); pFront.position.set(fx, 0.7, 5); pastureGroup.add(pFront);
-      const pBack = new THREE.Mesh(postGeo, fenceMat); pBack.position.set(fx, 0.7, -2); pastureGroup.add(pBack);
-      if (fx < 6) {
-        const r1 = new THREE.Mesh(railXGeo, fenceMat); r1.position.set(fx + 2, 0.9, 5); pastureGroup.add(r1);
-        const r2 = new THREE.Mesh(railXGeo, fenceMat); r2.position.set(fx + 2, 0.45, 5); pastureGroup.add(r2);
+    // Feeding Trough with fresh golden hay
+    const troughGroup = new THREE.Group();
+    troughGroup.position.set(0, 0, -1.0);
+    const troughBox = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.6, 1.0), materials.woodDark);
+    troughBox.position.y = 0.3;
+    troughBox.castShadow = true;
+    troughGroup.add(troughBox);
+    const hayMesh = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.25, 0.8), new THREE.MeshStandardMaterial({ color: 0xfbc02d, roughness: 0.9 }));
+    hayMesh.position.y = 0.48;
+    troughGroup.add(hayMesh);
+    pastureGroup.add(troughGroup);
+
+    // Water Trough with fresh water
+    const waterTrough = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 1.0), materials.woodDark);
+    waterTrough.position.set(-4.5, 0.25, 2.8);
+    waterTrough.castShadow = true;
+    pastureGroup.add(waterTrough);
+    const waterSurface = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.8), materials.water);
+    waterSurface.rotation.x = -Math.PI / 2;
+    waterSurface.position.set(-4.5, 0.45, 2.8);
+    pastureGroup.add(waterSurface);
+
+    function buildFenceSpan(x1, z1, x2, z2, postSpacing = 2.5) {
+      const dx = x2 - x1;
+      const dz = z2 - z1;
+      const len = Math.hypot(dx, dz);
+      const angle = Math.atan2(dx, dz);
+      const spans = Math.max(1, Math.round(len / postSpacing));
+      const spanLen = len / spans;
+      const railGeo = new THREE.BoxGeometry(0.09, 0.12, spanLen + 0.05);
+
+      for (let i = 0; i <= spans; i++) {
+        const t = i / spans;
+        const post = new THREE.Mesh(postGeo, fenceMat);
+        post.position.set(x1 + dx * t, 0.7, z1 + dz * t);
+        post.castShadow = true;
+        post.receiveShadow = true;
+        pastureGroup.add(post);
+      }
+
+      for (let i = 0; i < spans; i++) {
+        const t = (i + 0.5) / spans;
+        const rx = x1 + dx * t;
+        const rz = z1 + dz * t;
+
+        const railTop = new THREE.Mesh(railGeo, fenceMat);
+        railTop.position.set(rx, 0.95, rz);
+        railTop.rotation.y = angle;
+        railTop.castShadow = true;
+        pastureGroup.add(railTop);
+
+        const railBot = new THREE.Mesh(railGeo, fenceMat);
+        railBot.position.set(rx, 0.48, rz);
+        railBot.rotation.y = angle;
+        railBot.castShadow = true;
+        pastureGroup.add(railBot);
       }
     }
-    for (let fz = -2; fz <= 5; fz += 3.5) {
-      const pL = new THREE.Mesh(postGeo, fenceMat); pL.position.set(-6, 0.7, fz); pastureGroup.add(pL);
-      const pR = new THREE.Mesh(postGeo, fenceMat); pR.position.set(6, 0.7, fz); pastureGroup.add(pR);
-    }
+
+    // 1. Left fence line (from z = -4.5 to z = 5.5 at x = -6.0)
+    buildFenceSpan(-6.0, -4.5, -6.0, 5.5, 2.5);
+
+    // 2. Right fence line (from z = -4.5 to z = 5.5 at x = 6.0)
+    buildFenceSpan(6.0, -4.5, 6.0, 5.5, 2.5);
+
+    // 3. Back-left connector (from left fence to shed wall at z = -4.5)
+    buildFenceSpan(-6.0, -4.5, -4.5, -4.5, 1.5);
+
+    // 4. Back-right connector (from shed wall to right fence at z = -4.5)
+    buildFenceSpan(4.5, -4.5, 6.0, -4.5, 1.5);
+
+    // 5. Front-left fence line (from x = -6.0 to gatepost at x = -1.3, z = 5.5)
+    buildFenceSpan(-6.0, 5.5, -1.3, 5.5, 2.35);
+
+    // 6. Front-right fence line (from gatepost at x = 1.3 to x = 6.0, z = 5.5)
+    buildFenceSpan(1.3, 5.5, 6.0, 5.5, 2.35);
+
+    // 7. Gate at entrance (between x = -1.3 and x = 1.3 at z = 5.5)
+    const gatePostGeo = new THREE.CylinderGeometry(0.16, 0.16, 1.6, 8);
+    const gateCapGeo = new THREE.ConeGeometry(0.2, 0.22, 8);
+    [-1.3, 1.3].forEach(gx => {
+      const gPost = new THREE.Mesh(gatePostGeo, materials.woodDark);
+      gPost.position.set(gx, 0.8, 5.5);
+      gPost.castShadow = true;
+      pastureGroup.add(gPost);
+
+      const cap = new THREE.Mesh(gateCapGeo, materials.rubber);
+      cap.position.set(gx, 1.65, 5.5);
+      pastureGroup.add(cap);
+    });
+
+    // Open wooden farm gate hinged at left post (-1.3, 5.5), swinging outward into farmyard ~38 deg
+    const gateGroup = new THREE.Group();
+    gateGroup.position.set(-1.3, 0, 5.5);
+    gateGroup.rotation.y = -0.65;
+
+    const gateRailGeo = new THREE.BoxGeometry(2.3, 0.1, 0.08);
+    const gateTopRail = new THREE.Mesh(gateRailGeo, fenceMat);
+    gateTopRail.position.set(1.15, 0.95, 0);
+    gateTopRail.castShadow = true;
+    gateGroup.add(gateTopRail);
+
+    const gateBotRail = new THREE.Mesh(gateRailGeo, fenceMat);
+    gateBotRail.position.set(1.15, 0.48, 0);
+    gateBotRail.castShadow = true;
+    gateGroup.add(gateBotRail);
+
+    const gateEndPost = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.1), fenceMat);
+    gateEndPost.position.set(2.25, 0.7, 0);
+    gateGroup.add(gateEndPost);
+
+    // Diagonal Z brace
+    const gateBrace = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.08, 0.06), fenceMat);
+    gateBrace.position.set(1.15, 0.71, 0.02);
+    gateBrace.rotation.z = 0.21;
+    gateGroup.add(gateBrace);
+
+    // Iron hinge straps
+    [0.95, 0.48].forEach(hy => {
+      const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.06, 0.1), materials.rubber);
+      hinge.position.set(0.2, hy, 0);
+      gateGroup.add(hinge);
+    });
+
+    pastureGroup.add(gateGroup);
 
     // 3 Animated Cows
     const cowSpotMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
@@ -940,12 +1116,23 @@
         const stepX = Math.sin(this.angle) * this.speed * dt;
         const stepZ = Math.cos(this.angle) * this.speed * dt;
 
-        // Strict boundary: vehicle only moves on owned land plots
-        if (isPositionOnOwnedPlot(this.x + stepX, this.z)) {
+        // Strict boundary: vehicle only moves on owned land plots and clear of solid obstacles
+        const vRadius = 1.3;
+        let movedX = false;
+        let movedZ = false;
+
+        if (isPositionOnOwnedPlot(this.x + stepX, this.z) && !checkWorldCollision(this.x + stepX, this.z, vRadius)) {
           this.x += stepX;
+          movedX = true;
         }
-        if (isPositionOnOwnedPlot(this.x, this.z + stepZ)) {
+        if (isPositionOnOwnedPlot(this.x, this.z + stepZ) && !checkWorldCollision(this.x, this.z + stepZ, vRadius)) {
           this.z += stepZ;
+          movedZ = true;
+        }
+
+        // Smooth deceleration on direct collision into a building or fence
+        if (!movedX && !movedZ && Math.abs(this.speed) > 0.4) {
+          this.speed *= 0.15;
         }
 
         // Burn fuel when moving
@@ -1092,14 +1279,14 @@
       const stepX = Math.sin(this.angle) * this.speed * dt;
       const stepZ = Math.cos(this.angle) * this.speed * dt;
 
-      if (isPositionOnOwnedPlot(this.x + stepX, this.z + stepZ)) {
+      const vRadius = 1.2;
+      if (isPositionOnOwnedPlot(this.x + stepX, this.z + stepZ) && !checkWorldCollision(this.x + stepX, this.z + stepZ, vRadius)) {
         this.x += stepX;
         this.z += stepZ;
-      } else {
-        if (isPositionOnOwnedPlot(tx, tz)) {
-          this.x = tx;
-          this.z = tz;
-        }
+      } else if (isPositionOnOwnedPlot(this.x + stepX, this.z) && !checkWorldCollision(this.x + stepX, this.z, vRadius)) {
+        this.x += stepX;
+      } else if (isPositionOnOwnedPlot(this.x, this.z + stepZ) && !checkWorldCollision(this.x, this.z + stepZ, vRadius)) {
+        this.z += stepZ;
       }
     }
 
@@ -1515,9 +1702,17 @@
           const nx = this.x + (fwX * f + rtX * s) * moveSpeed;
           const nz = this.z + (fwZ * f + rtZ * s) * moveSpeed;
 
-          // Bounds check to stay on map
-          if (nx >= 0 && nx <= GRID_COLS * TILE_SIZE) this.x = nx;
-          if (nz >= 0 && nz <= GRID_ROWS * TILE_SIZE) this.z = nz;
+          // Solid collision check with sliding on X and Z independently
+          const pRadius = 0.45;
+          const mapMaxX = GRID_COLS * TILE_SIZE - pRadius;
+          const mapMaxZ = GRID_ROWS * TILE_SIZE - pRadius;
+
+          if (nx >= pRadius && nx <= mapMaxX && !checkWorldCollision(nx, this.z, pRadius)) {
+            this.x = nx;
+          }
+          if (nz >= pRadius && nz <= mapMaxZ && !checkWorldCollision(this.x, nz, pRadius)) {
+            this.z = nz;
+          }
 
           // Face walk direction in 3rd person
           this.angle = fpsControls.yaw;
