@@ -370,58 +370,157 @@
   const dummyScale = new THREE.Vector3();
   const dummyRot = new THREE.Quaternion();
 
-  // Create crop geometries for each type
+  // Helper to merge multiple geometries with vertex colors into a single BufferGeometry
+  function buildColoredGeo(components) {
+    let totalVerts = 0;
+    const list = components.map(c => {
+      const ni = c.geo.index ? c.geo.toNonIndexed() : c.geo;
+      totalVerts += ni.attributes.position.count;
+      return { ni, color: c.color };
+    });
+
+    const posArr = new Float32Array(totalVerts * 3);
+    const normArr = new Float32Array(totalVerts * 3);
+    const colArr = new Float32Array(totalVerts * 3);
+
+    let offset = 0;
+    list.forEach(({ ni, color }) => {
+      const count = ni.attributes.position.count;
+      posArr.set(ni.attributes.position.array, offset * 3);
+      if (ni.attributes.normal) normArr.set(ni.attributes.normal.array, offset * 3);
+      for (let i = 0; i < count; i++) {
+        colArr[(offset + i) * 3] = color[0];
+        colArr[(offset + i) * 3 + 1] = color[1];
+        colArr[(offset + i) * 3 + 2] = color[2];
+      }
+      offset += count;
+    });
+
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+    merged.setAttribute('normal', new THREE.BufferAttribute(normArr, 3));
+    merged.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+    return merged;
+  }
+
+  // Create rich, highly visible procedural 3D crop models
   function initCropMeshSystem() {
-    // 1. Wheat: Cluster of stalk cylinders with golden grain spikes
-    const wheatGeo = new THREE.ConeGeometry(0.35, 1.6, 6);
-    wheatGeo.translate(0, 0.8, 0);
-    cropMeshes.wheat = new THREE.InstancedMesh(wheatGeo, new THREE.MeshStandardMaterial({
-      color: 0xf1c40f,
-      roughness: 0.7
-    }), MAX_CROPS);
+    const cropMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.65,
+      metalness: 0.05
+    });
+
+    // 1. Wheat: Lush clump of 5 golden stalks with grain heads
+    const wheatParts = [];
+    const stemC = new THREE.CylinderGeometry(0.04, 0.05, 1.5, 6);
+    stemC.translate(0, 0.75, 0);
+    wheatParts.push({ geo: stemC, color: [0.85, 0.72, 0.25] });
+    const earC = new THREE.ConeGeometry(0.22, 0.85, 6);
+    earC.translate(0, 1.6, 0);
+    wheatParts.push({ geo: earC, color: [0.98, 0.85, 0.35] });
+
+    [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]].forEach(([ox, oz]) => {
+      const stem = new THREE.CylinderGeometry(0.035, 0.045, 1.3, 5);
+      stem.translate(0, 0.65, 0);
+      stem.rotateZ(ox * 0.4);
+      stem.rotateX(oz * 0.4);
+      stem.translate(ox, 0, oz);
+      wheatParts.push({ geo: stem, color: [0.82, 0.70, 0.22] });
+
+      const ear = new THREE.ConeGeometry(0.18, 0.7, 5);
+      ear.translate(0, 1.3, 0);
+      ear.rotateZ(ox * 0.4);
+      ear.rotateX(oz * 0.4);
+      ear.translate(ox, 0, oz);
+      wheatParts.push({ geo: ear, color: [0.95, 0.82, 0.32] });
+    });
+    const wheatGeo = buildColoredGeo(wheatParts);
+    cropMeshes.wheat = new THREE.InstancedMesh(wheatGeo, cropMat, MAX_CROPS);
     cropMeshes.wheat.castShadow = true;
     cropMeshes.wheat.receiveShadow = true;
     cropMeshes.wheat.count = 0;
     scene.add(cropMeshes.wheat);
 
-    // 2. Corn: Taller leafy stalk with golden cob
-    const cornGeo = new THREE.CylinderGeometry(0.18, 0.25, 2.4, 6);
-    cornGeo.translate(0, 1.2, 0);
-    cropMeshes.corn = new THREE.InstancedMesh(cornGeo, new THREE.MeshStandardMaterial({
-      color: 0x8bc34a,
-      roughness: 0.65
-    }), MAX_CROPS);
+    // 2. Corn: Sturdy tall green stalk, 4 long leaves, and 2 ripe golden cobs
+    const cornParts = [];
+    const cornStem = new THREE.CylinderGeometry(0.14, 0.18, 2.5, 6);
+    cornStem.translate(0, 1.25, 0);
+    cornParts.push({ geo: cornStem, color: [0.22, 0.58, 0.22] });
+
+    [[-0.6, 1.2, 0, 0.6], [0.6, 1.5, 0, -0.6], [0, 1.8, -0.6, 0], [0, 2.0, 0.6, 0]].forEach(([lx, ly, lz, rotZ]) => {
+      const leaf = new THREE.BoxGeometry(0.9, 0.08, 0.25);
+      leaf.rotateZ(rotZ || 0);
+      leaf.translate(lx, ly, lz);
+      cornParts.push({ geo: leaf, color: [0.3, 0.7, 0.26] });
+    });
+
+    [[-0.25, 1.3, 0.2], [0.25, 1.6, -0.2]].forEach(([cx, cy, cz]) => {
+      const cob = new THREE.CylinderGeometry(0.15, 0.15, 0.7, 6);
+      cob.rotateZ(cx > 0 ? -0.4 : 0.4);
+      cob.translate(cx, cy, cz);
+      cornParts.push({ geo: cob, color: [1.0, 0.78, 0.1] });
+    });
+    const cornGeo = buildColoredGeo(cornParts);
+    cropMeshes.corn = new THREE.InstancedMesh(cornGeo, cropMat, MAX_CROPS);
     cropMeshes.corn.castShadow = true;
     cropMeshes.corn.receiveShadow = true;
     cropMeshes.corn.count = 0;
     scene.add(cropMeshes.corn);
 
-    // 3. Carrot: Lush green bush with top visible carrot crown
-    const carrotGeo = new THREE.SphereGeometry(0.55, 6, 6);
-    carrotGeo.translate(0, 0.45, 0);
-    cropMeshes.carrot = new THREE.InstancedMesh(carrotGeo, new THREE.MeshStandardMaterial({
-      color: 0x388e3c,
-      roughness: 0.8
-    }), MAX_CROPS);
+    // 3. Carrot: Bright orange root shoulder & 5 lush spreading green fronds
+    const carrotParts = [];
+    const root = new THREE.CylinderGeometry(0.32, 0.18, 0.5, 8);
+    root.translate(0, 0.25, 0);
+    carrotParts.push({ geo: root, color: [1.0, 0.45, 0.0] });
+
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * Math.PI * 2) / 5;
+      const frond = new THREE.ConeGeometry(0.35, 1.1, 5);
+      frond.translate(0, 0.55, 0);
+      frond.rotateZ(0.35);
+      frond.rotateY(angle);
+      frond.translate(Math.sin(angle) * 0.15, 0.4, Math.cos(angle) * 0.15);
+      carrotParts.push({ geo: frond, color: [0.22, 0.68, 0.24] });
+    }
+    const carrotGeo = buildColoredGeo(carrotParts);
+    cropMeshes.carrot = new THREE.InstancedMesh(carrotGeo, cropMat, MAX_CROPS);
     cropMeshes.carrot.castShadow = true;
     cropMeshes.carrot.receiveShadow = true;
     cropMeshes.carrot.count = 0;
     scene.add(cropMeshes.carrot);
 
-    // 4. Sunflower: Tall dark stem with bright golden head disc
-    const sunflowerGeo = new THREE.CylinderGeometry(0.45, 0.15, 2.2, 8);
-    sunflowerGeo.translate(0, 1.1, 0);
-    cropMeshes.sunflower = new THREE.InstancedMesh(sunflowerGeo, new THREE.MeshStandardMaterial({
-      color: 0xffb300,
-      roughness: 0.6
-    }), MAX_CROPS);
+    // 4. Sunflower: Tall stem, broad leaves, large golden petal disc & brown center
+    const sunParts = [];
+    const sunStem = new THREE.CylinderGeometry(0.14, 0.18, 2.6, 8);
+    sunStem.translate(0, 1.3, 0);
+    sunParts.push({ geo: sunStem, color: [0.18, 0.5, 0.2] });
+
+    [[-0.5, 1.2, 0, 0.5], [0.5, 1.6, 0, -0.5]].forEach(([lx, ly, lz, rotZ]) => {
+      const leaf = new THREE.BoxGeometry(0.8, 0.06, 0.35);
+      leaf.rotateZ(rotZ);
+      leaf.translate(lx, ly, lz);
+      sunParts.push({ geo: leaf, color: [0.24, 0.6, 0.24] });
+    });
+
+    const petalRing = new THREE.CylinderGeometry(0.85, 0.85, 0.1, 12);
+    petalRing.rotateX(0.25);
+    petalRing.translate(0, 2.6, 0.2);
+    sunParts.push({ geo: petalRing, color: [1.0, 0.84, 0.0] });
+
+    const seedDisc = new THREE.CylinderGeometry(0.52, 0.52, 0.13, 12);
+    seedDisc.rotateX(0.25);
+    seedDisc.translate(0, 2.61, 0.22);
+    sunParts.push({ geo: seedDisc, color: [0.25, 0.14, 0.08] });
+    const sunflowerGeo = buildColoredGeo(sunParts);
+    cropMeshes.sunflower = new THREE.InstancedMesh(sunflowerGeo, cropMat, MAX_CROPS);
     cropMeshes.sunflower.castShadow = true;
     cropMeshes.sunflower.receiveShadow = true;
     cropMeshes.sunflower.count = 0;
     scene.add(cropMeshes.sunflower);
   }
 
-  
+  // Dynamic instance rendering with wind sway and visible growth scaling
   function syncInstancedCropsDynamic(timeSec) {
     const counts = { wheat: 0, corn: 0, carrot: 0, sunflower: 0 };
     for (let r = 0; r < GRID_ROWS; r++) {
@@ -434,14 +533,17 @@
 
           const wx = c * TILE_SIZE + TILE_SIZE / 2;
           const wz = r * TILE_SIZE + TILE_SIZE / 2;
-          const scale = Math.max(0.15, (tile.crop.progress / 100) * (tile.fertilized ? 1.2 : 1.0));
+          
+          // Growth scale: starts at 0.35 (clearly visible sprout) up to 1.25 when mature
+          const progress = tile.crop.progress || 0;
+          const scale = Math.max(0.35, (progress / 100) * (tile.fertilized ? 1.25 : 1.05));
 
-          const windSwayX = Math.sin(timeSec * 2.5 + wx * 0.1) * 0.15 * scale;
-          const windSwayZ = Math.cos(timeSec * 2.1 + wz * 0.1) * 0.15 * scale;
+          const windSwayX = Math.sin(timeSec * 2.2 + wx * 0.25) * 0.08 * scale;
+          const windSwayZ = Math.cos(timeSec * 1.8 + wz * 0.25) * 0.08 * scale;
 
-          dummyPos.set(wx, 0, wz);
+          dummyPos.set(wx, 0.0, wz);
           dummyScale.set(scale, scale, scale);
-          const euler = new THREE.Euler(windSwayX, (c * 17 + r * 31) % 6, windSwayZ, 'YXZ');
+          const euler = new THREE.Euler(windSwayX, (c * 17 + r * 31) % 6.28, windSwayZ, 'YXZ');
           dummyRot.setFromEuler(euler);
           dummyMat.compose(dummyPos, dummyRot, dummyScale);
           cropMeshes[type].setMatrixAt(idx, dummyMat);
@@ -589,6 +691,78 @@
       }
     }
     return false;
+  }
+
+  // --- VEHICLE OBSTACLE AVOIDANCE & WAYPOINT NAVIGATION ---
+  const NAV_ZONES = [
+    // Farmstead corridor at x = 24.5 (avoids orchard at x=2, barn at x=10, silo at x=19.5, and windmill at x=32)
+    { name: 'Farmstead', minX: 0.0, maxX: 22.5, minZ: 4.0, maxZ: 16.0, bypassX: 24.5 },
+    // Cow Pasture bypass corridor along east fence at x = 16.5
+    { name: 'CowPasture', minX: 0.0, maxX: 15.0, minZ: 25.0, maxZ: 38.5, bypassX: 16.5 },
+    // Windmill corridor at x = 24.5
+    { name: 'Windmill', minX: 26.5, maxX: 37.5, minZ: 6.5, maxZ: 17.5, bypassX: 24.5 }
+  ];
+
+  // Fast Liang-Barsky 2D line-box intersection test
+  function lineIntersectsNavBox(x1, z1, x2, z2, box, pad = 0.8) {
+    const minX = box.minX - pad, maxX = box.maxX + pad;
+    const minZ = box.minZ - pad, maxZ = box.maxZ + pad;
+
+    if (x1 >= minX && x1 <= maxX && z1 >= minZ && z1 <= maxZ) return true;
+    if (x2 >= minX && x2 <= maxX && z2 >= minZ && z2 <= maxZ) return true;
+
+    let t0 = 0, t1 = 1;
+    const dx = x2 - x1, dz = z2 - z1;
+    const checks = [
+      { p: -dx, q: x1 - minX },
+      { p: dx, q: maxX - x1 },
+      { p: -dz, q: z1 - minZ },
+      { p: dz, q: maxZ - z1 }
+    ];
+    for (const { p, q } of checks) {
+      if (p === 0) {
+        if (q < 0) return false;
+      } else {
+        const r = q / p;
+        if (p < 0) {
+          if (r > t1) return false;
+          if (r > t0) t0 = r;
+        } else {
+          if (r < t0) return false;
+          if (r < t1) t1 = r;
+        }
+      }
+    }
+    return t0 <= t1;
+  }
+
+  // Computes direct route or clearance corridor waypoint around blocking buildings
+  function getNavigationWaypoint(fromX, fromZ, toX, toZ) {
+    for (let i = 0; i < NAV_ZONES.length; i++) {
+      const zone = NAV_ZONES[i];
+      if (lineIntersectsNavBox(fromX, fromZ, toX, toZ, zone, 1.2)) {
+        const passX = zone.bypassX;
+        const southZ = zone.maxZ + 2.6;
+        const northZ = zone.minZ - 2.6;
+
+        if (fromZ > zone.maxZ) {
+          if (Math.hypot(passX - fromX, southZ - fromZ) > 2.2) {
+            return { x: passX, z: southZ, isDirect: false };
+          } else {
+            return { x: passX, z: northZ, isDirect: false };
+          }
+        } else if (fromZ < zone.minZ) {
+          if (Math.hypot(passX - fromX, northZ - fromZ) > 2.2) {
+            return { x: passX, z: northZ, isDirect: false };
+          } else {
+            return { x: passX, z: southZ, isDirect: false };
+          }
+        } else {
+          return { x: passX, z: fromZ, isDirect: false };
+        }
+      }
+    }
+    return { x: toX, z: toZ, isDirect: true };
   }
 
   function buildSpecialStructures() {
@@ -1181,7 +1355,7 @@
           for (let r = 0; r < GRID_ROWS; r++) {
             for (let c = 0; c < GRID_COLS; c++) {
               const t = grid[r][c];
-              if (isTileOwned(c, r) && t.soil === 'grass') {
+              if (isTileOwned(c, r) && t.soil === 'grass' && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.1)) {
                 const dist = Math.hypot((c * TILE_SIZE + 1.5) - this.x, (r * TILE_SIZE + 1.5) - this.z);
                 if (dist < minDist) {
                   minDist = dist;
@@ -1212,7 +1386,7 @@
           for (let r = 0; r < GRID_ROWS; r++) {
             for (let c = 0; c < GRID_COLS; c++) {
               const t = grid[r][c];
-              if (isTileOwned(c, r) && t.crop && t.crop.mature) {
+              if (isTileOwned(c, r) && t.crop && t.crop.mature && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.1)) {
                 const dist = Math.hypot((c * TILE_SIZE + 1.5) - this.x, (r * TILE_SIZE + 1.5) - this.z);
                 if (dist < minDist) {
                   minDist = dist;
@@ -1243,7 +1417,7 @@
           for (let r = 0; r < GRID_ROWS; r++) {
             for (let c = 0; c < GRID_COLS; c++) {
               const t = grid[r][c];
-              if (isTileOwned(c, r) && t.crop && t.moisture < 30) {
+              if (isTileOwned(c, r) && t.crop && t.moisture < 30 && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.1)) {
                 const dist = Math.hypot((c * TILE_SIZE + 1.5) - this.x, (r * TILE_SIZE + 1.5) - this.z);
                 if (dist < minDist) {
                   minDist = dist;
@@ -1268,25 +1442,79 @@
     }
 
     steerAndDriveTowards(tx, tz, dt) {
-      const targetAngle = Math.atan2(tx - this.x, tz - this.z);
+      // 1. Calculate waypoint avoiding building zones
+      const nav = getNavigationWaypoint(this.x, this.z, tx, tz);
+      const targetX = nav.x;
+      const targetZ = nav.z;
+
+      // 2. Base steering towards current waypoint / target
+      let targetAngle = Math.atan2(targetX - this.x, targetZ - this.z);
+
+      // 3. Dynamic Whiskers (Feeler ray probes) for immediate local obstacle avoidance
+      const probeDist = 3.8;
+      const centerHit = checkWorldCollision(this.x + Math.sin(this.angle) * probeDist, this.z + Math.cos(this.angle) * probeDist, 1.1);
+
+      if (centerHit) {
+        const leftAngle = this.angle + 0.65;
+        const rightAngle = this.angle - 0.65;
+        const leftHit = checkWorldCollision(this.x + Math.sin(leftAngle) * 3.2, this.z + Math.cos(leftAngle) * 3.2, 1.0);
+        const rightHit = checkWorldCollision(this.x + Math.sin(rightAngle) * 3.2, this.z + Math.cos(rightAngle) * 3.2, 1.0);
+
+        if (!leftHit && rightHit) {
+          targetAngle = this.angle + 1.2;
+        } else if (!rightHit && leftHit) {
+          targetAngle = this.angle - 1.2;
+        } else if (leftHit && rightHit) {
+          targetAngle = this.angle + Math.PI * 0.75; // Turn around
+        }
+      }
+
       let diff = targetAngle - this.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
 
-      this.angle += Math.sign(diff) * Math.min(Math.abs(diff), this.def.turnSpeed * dt);
-      this.speed = this.def.speed * 0.85;
+      this.angle += Math.sign(diff) * Math.min(Math.abs(diff), this.def.turnSpeed * 1.25 * dt);
+
+      // Speed modulation: slow down in tight turns or near obstacles
+      const turnSlowdown = Math.max(0.4, 1.0 - Math.abs(diff) * 0.45);
+      const probeSlowdown = centerHit ? 0.45 : 1.0;
+      this.speed = this.def.speed * 0.85 * turnSlowdown * probeSlowdown;
 
       const stepX = Math.sin(this.angle) * this.speed * dt;
       const stepZ = Math.cos(this.angle) * this.speed * dt;
 
       const vRadius = 1.2;
-      if (isPositionOnOwnedPlot(this.x + stepX, this.z + stepZ) && !checkWorldCollision(this.x + stepX, this.z + stepZ, vRadius)) {
+      let movedX = false;
+      let movedZ = false;
+
+      if (isPositionOnOwnedPlot(this.x + stepX, this.z) && !checkWorldCollision(this.x + stepX, this.z, vRadius)) {
         this.x += stepX;
+        movedX = true;
+      }
+      if (isPositionOnOwnedPlot(this.x, this.z + stepZ) && !checkWorldCollision(this.x, this.z + stepZ, vRadius)) {
         this.z += stepZ;
-      } else if (isPositionOnOwnedPlot(this.x + stepX, this.z) && !checkWorldCollision(this.x + stepX, this.z, vRadius)) {
-        this.x += stepX;
-      } else if (isPositionOnOwnedPlot(this.x, this.z + stepZ) && !checkWorldCollision(this.x, this.z + stepZ, vRadius)) {
-        this.z += stepZ;
+        movedZ = true;
+      }
+
+      // Stuck detection and automatic reverse-turn maneuver
+      if (!movedX && !movedZ) {
+        this.stuckTimer = (this.stuckTimer || 0) + dt;
+        if (this.stuckTimer > 0.4) {
+          this.speed = -this.def.speed * 0.45;
+          this.angle += 2.2 * dt;
+          const revX = Math.sin(this.angle) * this.speed * dt;
+          const revZ = Math.cos(this.angle) * this.speed * dt;
+          if (isPositionOnOwnedPlot(this.x + revX, this.z + revZ) && !checkWorldCollision(this.x + revX, this.z + revZ, 1.0)) {
+            this.x += revX;
+            this.z += revZ;
+          }
+          if (this.stuckTimer > 1.4) {
+            this.stuckTimer = 0;
+            this.targetTile = null;
+          }
+        }
+      } else {
+        this.stuckTimer = 0;
       }
     }
 
@@ -3212,13 +3440,16 @@
     updateCrops(dt);
     updateCamera(dt);
 
+    // Dynamic 3D crop models rendering & wind sway animation
+    const timeSec = now / 1000;
+    syncInstancedCropsDynamic(timeSec);
+
     // Windmill blades rotation
     if (millBladesGroup) {
       millBladesGroup.rotation.z += dt * 0.85;
     }
 
     // Cows grazing animation & production
-    const timeSec = now / 1000;
     cowMeshes.forEach((cow, i) => {
       if (cow.headGroup) {
         cow.headGroup.rotation.x = Math.sin(timeSec * 1.5 + i) * 0.25;
