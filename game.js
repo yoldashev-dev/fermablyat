@@ -270,11 +270,16 @@
         const rowSec = Math.min(2, Math.floor(r / 16));
         const plotId = rowSec * 3 + colSec;
 
+        const isOwned = PLOTS[plotId].owned;
+        const isFarmsteadYard = (c >= 0 && c <= 7 && r >= 1 && r <= 5);
+        const isPastureYard = (c >= 0 && c <= 5 && r >= 8 && r <= 13);
+        const isFarmable = !isFarmsteadYard && !isPastureYard;
+
         grid[r][c] = {
           c: c,
           r: r,
           plotId: plotId,
-          soil: 'grass',
+          soil: isFarmsteadYard ? 'yard' : (isPastureYard ? 'corral' : 'grass'),
           moisture: 0,
           fertilized: false,
           fertility: 100,
@@ -284,11 +289,6 @@
           farmable: isFarmable,
           deco: (c * 7 + r * 13) % 8
         };
-
-        const isOwned = PLOTS[plotId].owned;
-        const isFarmsteadYard = (c >= 0 && c <= 7 && r >= 1 && r <= 5);
-        const isPastureYard = (c >= 0 && c <= 5 && r >= 8 && r <= 13);
-        const isFarmable = !isFarmsteadYard && !isPastureYard;
 
         let baseMat;
         if (!isOwned) {
