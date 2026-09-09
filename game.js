@@ -136,7 +136,7 @@
     warehouse: {
       capacity: 250,
       upgradeLevel: 1,
-      items: { wheat: 0, corn: 0, carrot: 0, sunflower: 0, flour: 0, milk: 0, manure: 2 }
+      items: { wheat: 0, corn: 0, potato: 0, carrot: 0, sunflower: 0, flour: 0, milk: 0, manure: 2 }
     },
     cowsCount: 2,
     cowsFed: true,
@@ -151,6 +151,7 @@
   const CROP_INFO = {
     wheat: { name: 'Пшеница', icon: '🌾', seedCost: 5, basePrice: 16, growTime: 18, color: 0xf1c40f },
     corn: { name: 'Кукуруза', icon: '🌽', seedCost: 12, basePrice: 38, growTime: 28, color: 0xf39c12 },
+    potato: { name: 'Картофель', icon: '🥔', seedCost: 15, basePrice: 52, growTime: 24, color: 0x8d6e63 },
     carrot: { name: 'Морковь', icon: '🥕', seedCost: 20, basePrice: 72, growTime: 40, color: 0xe67e22 },
     sunflower: { name: 'Подсолнух', icon: '🌻', seedCost: 35, basePrice: 135, growTime: 55, color: 0xffd700 },
     flour: { name: 'Мука высший сорт', icon: '🌾', seedCost: 0, basePrice: 46, growTime: 0, color: 0xffffff, isProduct: true },
@@ -161,6 +162,7 @@
   const market = {
     wheat: { price: 16, trend: 0 },
     corn: { price: 38, trend: 0 },
+    potato: { price: 52, trend: 0 },
     carrot: { price: 72, trend: 0 },
     sunflower: { price: 135, trend: 0 },
     flour: { price: 46, trend: 0 },
@@ -279,13 +281,25 @@
           lastCrop: null,
           hasWeeds: false,
           crop: null,
+          farmable: isFarmable,
           deco: (c * 7 + r * 13) % 8
         };
 
         const isOwned = PLOTS[plotId].owned;
-        const baseMat = isOwned
-          ? ((c + r) % 2 === 0 ? materials.grassA : materials.grassB)
-          : materials.unowned;
+        const isFarmsteadYard = (c >= 0 && c <= 7 && r >= 1 && r <= 5);
+        const isPastureYard = (c >= 0 && c <= 5 && r >= 8 && r <= 13);
+        const isFarmable = !isFarmsteadYard && !isPastureYard;
+
+        let baseMat;
+        if (!isOwned) {
+          baseMat = materials.unowned;
+        } else if (isFarmsteadYard) {
+          baseMat = materials.road;
+        } else if (isPastureYard) {
+          baseMat = materials.tilledDry;
+        } else {
+          baseMat = (c + r) % 2 === 0 ? materials.grassA : materials.grassB;
+        }
 
         const mesh = new THREE.Mesh(tileGeo, baseMat);
         mesh.position.set(c * TILE_SIZE + TILE_SIZE / 2, -0.2, r * TILE_SIZE + TILE_SIZE / 2);
@@ -442,7 +456,51 @@
     cropMeshes.wheat.count = 0;
     scene.add(cropMeshes.wheat);
 
-    // 2. Corn: Sturdy tall green stalk, 4 long leaves, and 2 ripe golden cobs
+    // 2. Potato: Realistic mounded hill, visible golden tubers, bushy foliage & white blossoms
+    const potatoParts = [];
+    const mound = new THREE.CylinderGeometry(0.5, 0.75, 0.28, 8);
+    mound.translate(0, 0.14, 0);
+    potatoParts.push({ geo: mound, color: [0.38, 0.24, 0.16] });
+
+    [[-0.32, 0.18, 0.2], [0.3, 0.16, -0.22]].forEach(([px, py, pz]) => {
+      const tuber = new THREE.DodecahedronGeometry(0.18, 0);
+      tuber.scale(1.3, 0.8, 0.9);
+      tuber.translate(px, py, pz);
+      potatoParts.push({ geo: tuber, color: [0.76, 0.56, 0.34] });
+    });
+
+    [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]].forEach(([sx, sz]) => {
+      const stem = new THREE.CylinderGeometry(0.04, 0.05, 0.9, 5);
+      stem.translate(0, 0.45, 0);
+      stem.rotateZ(sx * 0.4);
+      stem.rotateX(sz * 0.4);
+      stem.translate(sx, 0.2, sz);
+      potatoParts.push({ geo: stem, color: [0.2, 0.52, 0.22] });
+
+      const leafCluster = new THREE.DodecahedronGeometry(0.26, 0);
+      leafCluster.scale(1.2, 0.7, 1.2);
+      leafCluster.translate(sx * 1.5, 0.88, sz * 1.5);
+      potatoParts.push({ geo: leafCluster, color: [0.26, 0.65, 0.26] });
+    });
+
+    [[0, 1.12, 0.1], [0.15, 1.16, -0.1]].forEach(([fx, fy, fz]) => {
+      const flower = new THREE.CylinderGeometry(0.12, 0.12, 0.04, 5);
+      flower.translate(fx, fy, fz);
+      potatoParts.push({ geo: flower, color: [0.96, 0.96, 1.0] });
+
+      const stamen = new THREE.CylinderGeometry(0.04, 0.04, 0.06, 5);
+      stamen.translate(fx, fy + 0.02, fz);
+      potatoParts.push({ geo: stamen, color: [1.0, 0.85, 0.0] });
+    });
+
+    const potatoGeo = buildColoredGeo(potatoParts);
+    cropMeshes.potato = new THREE.InstancedMesh(potatoGeo, cropMat, MAX_CROPS);
+    cropMeshes.potato.castShadow = true;
+    cropMeshes.potato.receiveShadow = true;
+    cropMeshes.potato.count = 0;
+    scene.add(cropMeshes.potato);
+
+    // 3. Corn: Sturdy tall green stalk, 4 long leaves, and 2 ripe golden cobs
     const cornParts = [];
     const cornStem = new THREE.CylinderGeometry(0.14, 0.18, 2.5, 6);
     cornStem.translate(0, 1.25, 0);
@@ -522,7 +580,7 @@
 
   // Dynamic instance rendering with wind sway and visible growth scaling
   function syncInstancedCropsDynamic(timeSec) {
-    const counts = { wheat: 0, corn: 0, carrot: 0, sunflower: 0 };
+    const counts = { wheat: 0, corn: 0, potato: 0, carrot: 0, sunflower: 0 };
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
         const tile = grid[r][c];
@@ -630,14 +688,8 @@
 
   // --- SOLID 3D COLLISION DETECTION SYSTEM ---
   const WORLD_OBSTACLES = [
-    // Main Farmhouse Barn (origin 10, 10, size 12 x 8.5)
-    { type: 'box', minX: 3.8, maxX: 16.2, minZ: 5.6, maxZ: 14.4, name: 'farmhouse' },
-
-    // Grain Silo (origin 19.5, 10, radius 2.2)
-    { type: 'circle', x: 19.5, z: 10.0, radius: 2.3, name: 'silo' },
-
-    // Garden Apple Tree (origin 2, 10)
-    { type: 'circle', x: 2.0, z: 10.0, radius: 0.8, name: 'orchard_tree' },
+    // Main Farmhouse Barn & Silo Complex (origin 10, 10 to 19.5, 10 - solid continuous block, no narrow trap cracks)
+    { type: 'box', minX: 1.0, maxX: 22.8, minZ: 4.6, maxZ: 15.4, name: 'farmstead_complex' },
 
     // Scenic Windmill (origin 32, 12, stone base radius 4.8)
     { type: 'circle', x: 32.0, z: 12.0, radius: 4.8, name: 'windmill' },
@@ -1355,7 +1407,7 @@
           for (let r = 0; r < GRID_ROWS; r++) {
             for (let c = 0; c < GRID_COLS; c++) {
               const t = grid[r][c];
-              if (isTileOwned(c, r) && t.soil === 'grass' && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.1)) {
+              if (isTileOwned(c, r) && t.farmable !== false && t.soil === 'grass' && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.4)) {
                 const dist = Math.hypot((c * TILE_SIZE + 1.5) - this.x, (r * TILE_SIZE + 1.5) - this.z);
                 if (dist < minDist) {
                   minDist = dist;
@@ -1386,7 +1438,7 @@
           for (let r = 0; r < GRID_ROWS; r++) {
             for (let c = 0; c < GRID_COLS; c++) {
               const t = grid[r][c];
-              if (isTileOwned(c, r) && t.crop && t.crop.mature && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.1)) {
+              if (isTileOwned(c, r) && t.farmable !== false && t.crop && t.crop.mature && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.4)) {
                 const dist = Math.hypot((c * TILE_SIZE + 1.5) - this.x, (r * TILE_SIZE + 1.5) - this.z);
                 if (dist < minDist) {
                   minDist = dist;
@@ -1417,7 +1469,7 @@
           for (let r = 0; r < GRID_ROWS; r++) {
             for (let c = 0; c < GRID_COLS; c++) {
               const t = grid[r][c];
-              if (isTileOwned(c, r) && t.crop && t.moisture < 30 && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.1)) {
+              if (isTileOwned(c, r) && t.farmable !== false && t.crop && t.moisture < 30 && !checkWorldCollision(c * TILE_SIZE + 1.5, r * TILE_SIZE + 1.5, 1.4)) {
                 const dist = Math.hypot((c * TILE_SIZE + 1.5) - this.x, (r * TILE_SIZE + 1.5) - this.z);
                 if (dist < minDist) {
                   minDist = dist;
@@ -1528,7 +1580,7 @@
           const r = centerR + ro;
           if (isTileOwned(c, r)) {
             const tile = grid[r][c];
-            if (this.def.action === 'plow' && tile.soil === 'grass') {
+            if (this.def.action === 'plow' && tile.farmable !== false && tile.soil === 'grass') {
               tile.soil = 'tilled';
               updateTileAppearance(c, r);
               spawn3DParticles(c * TILE_SIZE + 1.5, 0.4, r * TILE_SIZE + 1.5, 0x6d4c41, 4);
@@ -2425,6 +2477,10 @@
     }
 
     const tile = grid[r][c];
+    if (tile.farmable === false) {
+      showFloat('Двор усадьбы нельзя распахивать 🏡', window.innerWidth / 2, 80, '#78909c');
+      return;
+    }
     const wx = c * TILE_SIZE + 1.5;
     const wz = r * TILE_SIZE + 1.5;
 
@@ -2702,7 +2758,7 @@
           showFloat(`🎉 КОНТРАКТ ВЫПОЛНЕН! +${c.reward}`, window.innerWidth / 2, 80, '#2e7d32');
 
           // Generate next replacement contract
-          const cropsList = ['wheat', 'corn', 'carrot', 'flour', 'milk'];
+          const cropsList = ['wheat', 'corn', 'potato', 'carrot', 'flour', 'milk'];
           const randCrop = cropsList[Math.floor(Math.random() * cropsList.length)];
           const amt = Math.floor(Math.random() * 30 + 15);
           const baseP = market[randCrop] ? market[randCrop].price : 30;
