@@ -57,6 +57,7 @@
         <button class="hud-btn btn-mill" id="btn-nav-mill">🏭 Мельница</button>
         <button class="hud-btn btn-livestock" id="btn-nav-livestock">🐄 Коровник</button>
         <button class="hud-btn btn-rivals" id="btn-nav-rivals">🏆 Топ</button>
+        <button class="hud-btn btn-multiplayer" id="btn-nav-multiplayer" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(59, 130, 246, 0.3)); border-color: rgba(59, 130, 246, 0.5);">🌐 Онлайн</button>
       </div>
     </div>
 
@@ -292,6 +293,85 @@
       </div>
     </div>
 
+    <!-- MODAL 10: ONLINE MULTIPLAYER -->
+    <div class="modal-overlay" id="modal-multiplayer">
+      <div class="modal-content" style="max-width: 620px;">
+        <div class="modal-header">
+          <h2>🌐 Сетевой режим: Игра с другом</h2>
+          <button class="close-btn" data-close="modal-multiplayer">✕</button>
+        </div>
+        <p style="font-size: 13px; color: #94a3b8; margin-bottom: 12px;">
+          Пригласите друга на свою ферму! Усадьба друга появится на противоположном краю долины (Участок №8). Вы сможете в реальном времени видеть друг друга, вместе пахать, сажать картофель и пшеницу, поливать и гонять на тракторах!
+        </p>
+
+        <!-- Status Banner -->
+        <div id="mp-status-banner" class="mp-status-box disconnected">
+          <span class="mp-status-dot"></span>
+          <span id="mp-status-text">Одиночный режим (Не подключено)</span>
+        </div>
+
+        <div class="mp-columns">
+          <!-- Column 1: Host Game -->
+          <div class="mp-card">
+            <h3>🏠 Создать кооператив (Хост)</h3>
+            <p style="font-size: 12px; color: #94a3b8;">Создайте сервер фермы и отправьте ссылку другу:</p>
+            <button id="btn-mp-create" class="buy-btn" style="width: 100%; margin: 10px 0;">✨ Создать комнату</button>
+            <div id="mp-host-info" style="display: none;">
+              <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Код вашей комнаты:</div>
+              <div class="mp-code-box">
+                <span id="mp-room-code" style="font-size: 18px; font-weight: bold; letter-spacing: 2px; color: #34d399;">---</span>
+                <button id="btn-copy-code" class="action-btn" style="padding: 4px 10px; font-size: 11px;">📋 Код</button>
+              </div>
+              <button id="btn-copy-link" class="action-btn" style="width: 100%; margin-top: 8px; background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399; font-weight: bold;">🔗 Скопировать ссылку для друга</button>
+            </div>
+          </div>
+
+          <!-- Column 2: Join Friend -->
+          <div class="mp-card">
+            <h3>🚀 Войти к другу</h3>
+            <p style="font-size: 12px; color: #94a3b8;">Введите код комнаты, полученный от друга:</p>
+            <div style="display: flex; gap: 8px; margin: 10px 0;">
+              <input type="text" id="input-room-code" placeholder="Код (напр. FERMA-834)" maxlength="20" class="mp-input">
+              <button id="btn-mp-join" class="buy-btn" style="white-space: nowrap;">Войти</button>
+            </div>
+            <p style="font-size: 11px; color: #64748b;">Или просто перейдите по присланной ссылке прямо в браузере!</p>
+          </div>
+        </div>
+
+        <!-- Connected Info & Emotes Section -->
+        <div id="mp-active-section" style="display: none; margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 13px; font-weight: 600; color: #e2e8f0;">👥 Игроки на сервере:</span>
+            <button id="btn-mp-disconnect" class="action-btn" style="background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #f87171; padding: 4px 10px; font-size: 11px;">Отключиться</button>
+          </div>
+          <div id="mp-players-list" style="font-size: 12px; color: #cbd5e1; display: flex; gap: 14px;">
+            <div>🧑 Вы (<span id="mp-my-role">Хост</span>)</div>
+            <div id="mp-friend-status" style="color: #34d399;">👨‍🌾 Друг (Подключен)</div>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;">Быстрые эмоции (видны над головой фермера):</div>
+            <div class="mp-emotes-bar">
+              <button class="emote-btn" data-emote="👋 Привет!">👋 Привет!</button>
+              <button class="emote-btn" data-emote="🚜 Гонка!">🚜 Гонка!</button>
+              <button class="emote-btn" data-emote="🌾 Погнали сеять!">🌾 Погнали сеять!</button>
+              <button class="emote-btn" data-emote="🥔 Копаем картоху!">🥔 Копаем картоху!</button>
+              <button class="emote-btn" data-emote="💰 Богатеем!">💰 Богатеем!</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick In-Game Emote Bar -->
+    <div id="quick-emote-bar">
+      <button class="quick-emote-chip" data-emote="👋 Привет!">👋</button>
+      <button class="quick-emote-chip" data-emote="🚜 Гонка!">🚜</button>
+      <button class="quick-emote-chip" data-emote="🌾 Сеем!">🌾</button>
+      <button class="quick-emote-chip" data-emote="🥔 Картоха!">🥔</button>
+      <button class="quick-emote-chip" data-emote="❤️ Класс!">❤️</button>
+    </div>
+
     <!-- Mobile On-Screen Virtual Controls Overlay -->
     <div id="mobile-controls">
       <!-- Left: Dynamic Virtual Joystick -->
@@ -320,6 +400,7 @@
   <!-- 3D Engine & Scripts -->
   <script src="libs/three.min.js"></script>
   <script src="libs/OrbitControls.js"></script>
+  <script src="libs/peerjs.min.js"></script>
   <script src="audio.js"></script>
   <script src="game.js"></script>
 </body>

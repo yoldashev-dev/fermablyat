@@ -47,7 +47,22 @@
     btnTouchCam: document.getElementById('btn-touch-cam'),
     btnTouchVehicle: document.getElementById('btn-touch-vehicle'),
     btnTouchExit: document.getElementById('btn-touch-exit'),
-    btnQuickExitVehicle: document.getElementById('btn-quick-exit-vehicle')
+    btnQuickExitVehicle: document.getElementById('btn-quick-exit-vehicle'),
+    modalMultiplayer: document.getElementById('modal-multiplayer'),
+    btnNavMultiplayer: document.getElementById('btn-nav-multiplayer'),
+    btnMpCreate: document.getElementById('btn-mp-create'),
+    btnMpJoin: document.getElementById('btn-mp-join'),
+    btnMpDisconnect: document.getElementById('btn-mp-disconnect'),
+    inputRoomCode: document.getElementById('input-room-code'),
+    mpHostInfo: document.getElementById('mp-host-info'),
+    mpRoomCode: document.getElementById('mp-room-code'),
+    btnCopyCode: document.getElementById('btn-copy-code'),
+    btnCopyLink: document.getElementById('btn-copy-link'),
+    mpStatusBanner: document.getElementById('mp-status-banner'),
+    mpStatusText: document.getElementById('mp-status-text'),
+    mpActiveSection: document.getElementById('mp-active-section'),
+    mpMyRole: document.getElementById('mp-my-role'),
+    quickEmoteBar: document.getElementById('quick-emote-bar')
   };
 
   // --- MOBILE DEVICE DETECTION & OPTIMIZATIONS ---
@@ -216,7 +231,7 @@
     { id: 5, name: 'Плодородная низина', minC: 32, maxC: 47, minR: 16, maxR: 31, cost: 3600, owned: false },
     { id: 6, name: 'Речная долина', minC: 0, maxC: 15, minR: 32, maxR: 47, cost: 4800, owned: false },
     { id: 7, name: 'Южные чернозёмы', minC: 16, maxC: 31, minR: 32, maxR: 47, cost: 6500, owned: false },
-    { id: 8, name: 'Золотая равнина', minC: 32, maxC: 47, minR: 32, maxR: 47, cost: 9000, owned: false }
+    { id: 8, name: 'Усадьба Друга (Юго-Восток)', minC: 32, maxC: 47, minR: 32, maxR: 47, cost: 9000, owned: false }
   ];
 
   function isTileOwned(c, r) {
@@ -250,7 +265,11 @@
     yellowRim: new THREE.MeshStandardMaterial({ color: 0xfbc02d, roughness: 0.4, metalness: 0.6 }),
     steelPlow: new THREE.MeshStandardMaterial({ color: 0x90a4ae, roughness: 0.3, metalness: 0.85 }),
     goldGlow: new THREE.MeshBasicMaterial({ color: 0xffeb3b }),
-    selectionBox: new THREE.MeshBasicMaterial({ color: 0x00e676, wireframe: true })
+    selectionBox: new THREE.MeshBasicMaterial({ color: 0x00e676, wireframe: true }),
+    blueBarn: new THREE.MeshStandardMaterial({ color: 0x1565c0, roughness: 0.65 }),
+    cyanSilo: new THREE.MeshStandardMaterial({ color: 0x80deea, roughness: 0.35, metalness: 0.75 }),
+    friendShirt: new THREE.MeshStandardMaterial({ color: 0x00bcd4, roughness: 0.7 }),
+    friendCap: new THREE.MeshStandardMaterial({ color: 0x0288d1, roughness: 0.7 })
   };
 
   const tileGeo = new THREE.BoxGeometry(TILE_SIZE - 0.08, 0.4, TILE_SIZE - 0.08);
@@ -299,13 +318,16 @@
         const isOwned = PLOTS[plotId].owned;
         const isFarmsteadYard = (c >= 0 && c <= 7 && r >= 1 && r <= 5);
         const isPastureYard = (c >= 0 && c <= 5 && r >= 8 && r <= 13);
-        const isFarmable = !isFarmsteadYard && !isPastureYard;
+        const isFriendYard = (c >= 37 && c <= 45 && r >= 37 && r <= 43);
+        // Country road connecting the two farmsteads across the valley
+        const isConnectingRoad = (c === r && c >= 6 && c <= 38) || (c === r + 1 && c >= 7 && c <= 38);
+        const isFarmable = !isFarmsteadYard && !isPastureYard && !isFriendYard && !isConnectingRoad;
 
         grid[r][c] = {
           c: c,
           r: r,
           plotId: plotId,
-          soil: isFarmsteadYard ? 'yard' : (isPastureYard ? 'corral' : 'grass'),
+          soil: (isFarmsteadYard || isFriendYard || isConnectingRoad) ? 'yard' : (isPastureYard ? 'corral' : 'grass'),
           moisture: 0,
           fertilized: false,
           fertility: 100,
@@ -317,9 +339,9 @@
         };
 
         let baseMat;
-        if (!isOwned) {
+        if (!isOwned && !isConnectingRoad) {
           baseMat = materials.unowned;
-        } else if (isFarmsteadYard) {
+        } else if (isFarmsteadYard || isFriendYard || isConnectingRoad) {
           baseMat = materials.road;
         } else if (isPastureYard) {
           baseMat = materials.tilledDry;
@@ -391,8 +413,12 @@
     const mesh = tileMeshes[r][c];
     const isOwned = PLOTS[tile.plotId].owned;
 
-    if (!isOwned) {
+    if (!isOwned && tile.soil !== 'yard') {
       mesh.material = materials.unowned;
+    } else if (tile.soil === 'yard' || tile.soil === 'road') {
+      mesh.material = materials.road;
+    } else if (tile.soil === 'corral') {
+      mesh.material = materials.tilledDry;
     } else if (tile.soil === 'tilled') {
       mesh.material = tile.moisture > 30 ? materials.tilledWet : materials.tilledDry;
     } else {
@@ -1099,6 +1125,98 @@
     scene.add(pastureGroup);
   }
 
+
+  // --- FRIEND'S FARMSTEAD 3D ARCHITECTURE (OPPOSITE END OF MAP - PLOT 8) ---
+  const friendFarmsteadGroup = new THREE.Group();
+  scene.add(friendFarmsteadGroup);
+
+  function buildFriendFarmstead() {
+    while (friendFarmsteadGroup.children.length > 0) {
+      friendFarmsteadGroup.remove(friendFarmsteadGroup.children[0]);
+    }
+
+    const originX = 122;
+    const originZ = 122;
+    const barnW = 12;
+    const barnH = 7.5;
+    const barnD = 8.5;
+
+    // 1. Friend's Blue Farmhouse Barn
+    const barnBody = new THREE.Mesh(new THREE.BoxGeometry(barnW, barnH, barnD), materials.blueBarn);
+    barnBody.position.set(originX, barnH / 2, originZ);
+    barnBody.castShadow = true;
+    barnBody.receiveShadow = true;
+    friendFarmsteadGroup.add(barnBody);
+
+    const roofH = 3.8;
+    const barnRoof = createGableRoof(barnW, barnD, roofH, materials.roofTile, materials.blueBarn);
+    barnRoof.position.set(originX, barnH, originZ);
+    friendFarmsteadGroup.add(barnRoof);
+
+    // Door & Warm Windows
+    const door = new THREE.Mesh(new THREE.BoxGeometry(3.2, 4.5, 0.3), materials.woodDark);
+    door.position.set(originX, 2.25, originZ + barnD / 2 + 0.15);
+    friendFarmsteadGroup.add(door);
+
+    const winGeo = new THREE.BoxGeometry(1.6, 1.6, 0.15);
+    const winMat = new THREE.MeshBasicMaterial({ color: 0xffe082 });
+    const winL = new THREE.Mesh(winGeo, winMat);
+    winL.position.set(originX - 3.5, 4.5, originZ + barnD / 2 + 0.1);
+    friendFarmsteadGroup.add(winL);
+    const winR = new THREE.Mesh(winGeo, winMat);
+    winR.position.set(originX + 3.5, 4.5, originZ + barnD / 2 + 0.1);
+    friendFarmsteadGroup.add(winR);
+
+    // 2. Friend's Grain Silo with Cyan Beacon
+    const siloRadius = 2.2;
+    const siloH = 13;
+    const silo = new THREE.Mesh(new THREE.CylinderGeometry(siloRadius, siloRadius, siloH, 16), materials.cyanSilo);
+    silo.position.set(originX + barnW / 2 + 3.5, siloH / 2, originZ);
+    silo.castShadow = true;
+    silo.receiveShadow = true;
+    friendFarmsteadGroup.add(silo);
+
+    const dome = new THREE.Mesh(new THREE.ConeGeometry(siloRadius * 1.05, 3.0, 16), materials.cyanSilo);
+    dome.position.set(originX + barnW / 2 + 3.5, siloH + 1.5, originZ);
+    dome.castShadow = true;
+    friendFarmsteadGroup.add(dome);
+
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 8), new THREE.MeshBasicMaterial({ color: 0x00e5ff }));
+    beacon.position.set(originX + barnW / 2 + 3.5, siloH + 3.2, originZ);
+    friendFarmsteadGroup.add(beacon);
+
+    // 3. Friend's Orchard Tree
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 4.0, 8), materials.woodDark);
+    trunk.position.set(originX - barnW / 2 - 2.5, 2.0, originZ);
+    trunk.castShadow = true;
+    friendFarmsteadGroup.add(trunk);
+
+    const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(3.4, 1), new THREE.MeshStandardMaterial({ color: 0x388e3c, roughness: 0.8 }));
+    foliage.position.set(originX - barnW / 2 - 2.5, 5.5, originZ);
+    foliage.castShadow = true;
+    friendFarmsteadGroup.add(foliage);
+
+    // 4. 3D Billboard Sign: "Ферма Друга"
+    const signSprite = createTextSprite('🏡 Ферма Друга (Участок №8)');
+    signSprite.position.set(originX, 3.4, originZ + barnD / 2 + 3.5);
+    signSprite.scale.set(5.5, 1.3, 1);
+    friendFarmsteadGroup.add(signSprite);
+
+    const signPost = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 2.8, 8), materials.woodDark);
+    signPost.position.set(originX, 1.4, originZ + barnD / 2 + 3.5);
+    friendFarmsteadGroup.add(signPost);
+
+    // 5. Solid Colliders for Friend's Buildings
+    WORLD_OBSTACLES.push({
+      type: 'box',
+      minX: originX - barnW / 2 - 4.5,
+      maxX: originX + barnW / 2 + 6.0,
+      minZ: originZ - barnD / 2 - 1.0,
+      maxZ: originZ + barnD / 2 + 1.0,
+      name: 'friend_farmstead_complex'
+    });
+  }
+
   function buildFarmstead() {
     while (farmsteadGroup.children.length > 0) {
       farmsteadGroup.remove(farmsteadGroup.children[0]);
@@ -1660,6 +1778,258 @@
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(3.2, 0.75, 1);
     return sprite;
+  }
+
+
+  // --- REMOTE PLAYER FARMER AVATAR (FRIEND 3D CHARACTER) ---
+  class RemotePlayerFarmer3D {
+    constructor(x = 122, z = 135) {
+      this.x = x;
+      this.z = z;
+      this.y = 0;
+      this.angle = Math.PI;
+      this.targetX = x;
+      this.targetZ = z;
+      this.targetY = 0;
+      this.targetAngle = Math.PI;
+      this.walkAnimTime = 0;
+      this.isWalking = false;
+      this.isShift = false;
+      this.isSwinging = false;
+      this.swingTime = 0;
+      this.activeTool = 'hoe';
+      this.isDriving = false;
+
+      this.group = new THREE.Group();
+      this.group.name = 'remoteFarmerGroup';
+
+      this.buildModel();
+      this.buildOverheadUI();
+      this.buildTractorModel();
+
+      this.group.position.set(this.x, 0, this.z);
+      scene.add(this.group);
+    }
+
+    buildModel() {
+      const matBoots = new THREE.MeshStandardMaterial({ color: 0x37474f, roughness: 0.9 });
+      const matSkin = new THREE.MeshStandardMaterial({ color: 0xffcc80, roughness: 0.6 });
+      const matOveralls = new THREE.MeshStandardMaterial({ color: 0x1565c0, roughness: 0.8 });
+      const matShirt = materials.friendShirt;
+      const matCap = materials.friendCap;
+
+      this.charMeshGroup = new THREE.Group();
+
+      // Legs
+      this.leftHip = new THREE.Group();
+      this.leftHip.position.set(-0.2, 0.85, 0);
+      const legGeo = new THREE.BoxGeometry(0.24, 0.72, 0.24);
+      legGeo.translate(0, -0.36, 0);
+      const leftLeg = new THREE.Mesh(legGeo, matOveralls);
+      leftLeg.castShadow = true;
+      this.leftHip.add(leftLeg);
+      const bootGeo = new THREE.BoxGeometry(0.26, 0.22, 0.38);
+      bootGeo.translate(0, -0.68, 0.06);
+      this.leftHip.add(new THREE.Mesh(bootGeo, matBoots));
+      this.charMeshGroup.add(this.leftHip);
+
+      this.rightHip = new THREE.Group();
+      this.rightHip.position.set(0.2, 0.85, 0);
+      const rightLeg = new THREE.Mesh(legGeo, matOveralls);
+      rightLeg.castShadow = true;
+      this.rightHip.add(rightLeg);
+      this.rightHip.add(new THREE.Mesh(bootGeo, matBoots));
+      this.charMeshGroup.add(this.rightHip);
+
+      // Torso
+      this.torso = new THREE.Group();
+      this.torso.position.set(0, 0.85, 0);
+      const shirtGeo = new THREE.BoxGeometry(0.7, 0.76, 0.4);
+      shirtGeo.translate(0, 0.5, 0);
+      const shirt = new THREE.Mesh(shirtGeo, matShirt);
+      shirt.castShadow = true;
+      this.torso.add(shirt);
+
+      const overallsFront = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.42), matOveralls);
+      overallsFront.position.set(0, 0.45, 0);
+      this.torso.add(overallsFront);
+      this.charMeshGroup.add(this.torso);
+
+      // Head & Cap
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.44, 0.44), matSkin);
+      head.position.set(0, 2.02, 0);
+      head.castShadow = true;
+      this.charMeshGroup.add(head);
+
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.18, 0.48), matCap);
+      cap.position.set(0, 2.22, 0);
+      this.charMeshGroup.add(cap);
+
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.28), matCap);
+      visor.position.set(0, 2.16, 0.32);
+      this.charMeshGroup.add(visor);
+
+      // Arms
+      this.leftShoulder = new THREE.Group();
+      this.leftShoulder.position.set(-0.46, 1.7, 0);
+      const armGeo = new THREE.BoxGeometry(0.2, 0.72, 0.2);
+      armGeo.translate(0, -0.32, 0);
+      this.leftShoulder.add(new THREE.Mesh(armGeo, matShirt));
+      this.charMeshGroup.add(this.leftShoulder);
+
+      this.rightShoulder = new THREE.Group();
+      this.rightShoulder.position.set(0.46, 1.7, 0);
+      this.rightShoulder.add(new THREE.Mesh(armGeo, matShirt));
+
+      // Right Hand Tool
+      this.toolMesh = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), materials.wood);
+      this.toolMesh.position.set(0, -0.65, 0.3);
+      this.toolMesh.rotation.x = Math.PI / 4;
+      this.rightShoulder.add(this.toolMesh);
+      this.charMeshGroup.add(this.rightShoulder);
+
+      this.group.add(this.charMeshGroup);
+    }
+
+    buildOverheadUI() {
+      // 3D Name Tag
+      this.nameTag = createTextSprite('👨‍🌾 Друг');
+      this.nameTag.position.set(0, 2.7, 0);
+      this.nameTag.scale.set(2.4, 0.58, 1);
+      this.group.add(this.nameTag);
+
+      // 3D Emote Speech Bubble
+      this.emoteBubble = createTextSprite('');
+      this.emoteBubble.position.set(0, 3.4, 0);
+      this.emoteBubble.scale.set(3.2, 0.75, 1);
+      this.emoteBubble.visible = false;
+      this.group.add(this.emoteBubble);
+      this.emoteTimer = 0;
+    }
+
+    buildTractorModel() {
+      // Secondary colored tractor for the friend
+      this.tractorGroup = new THREE.Group();
+      const cyanBody = new THREE.MeshStandardMaterial({ color: 0x00acc1, roughness: 0.4 });
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 3.8), cyanBody);
+      chassis.position.set(0, 0.9, 0);
+      chassis.castShadow = true;
+      this.tractorGroup.add(chassis);
+
+      const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.4, 1.8), materials.glass);
+      cabin.position.set(0, 2.0, -0.4);
+      this.tractorGroup.add(cabin);
+
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 2.0), cyanBody);
+      roof.position.set(0, 2.75, -0.4);
+      this.tractorGroup.add(roof);
+
+      // Wheels
+      const wGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.5, 16);
+      wGeo.rotateZ(Math.PI / 2);
+      [[-1.4, 0.7, 1.2], [1.4, 0.7, 1.2], [-1.4, 0.9, -1.2], [1.4, 0.9, -1.2]].forEach(([wx, wy, wz]) => {
+        const wheel = new THREE.Mesh(wGeo, materials.rubber);
+        wheel.position.set(wx, wy, wz);
+        this.tractorGroup.add(wheel);
+      });
+
+      this.tractorGroup.visible = false;
+      this.group.add(this.tractorGroup);
+    }
+
+    setTargetState(data) {
+      this.targetX = data.x;
+      this.targetZ = data.z;
+      this.targetY = data.y || 0;
+      this.targetAngle = data.yaw || 0;
+      this.isWalking = data.isWalking;
+      this.isShift = data.isShift;
+      this.isSwinging = data.isSwinging;
+      this.activeTool = data.activeTool || 'hoe';
+      this.isDriving = !!data.isDriving;
+
+      if (data.vehX !== undefined && this.isDriving) {
+        this.targetX = data.vehX;
+        this.targetZ = data.vehZ;
+        this.targetAngle = data.vehAngle;
+      }
+    }
+
+    showEmote(text) {
+      this.group.remove(this.emoteBubble);
+      this.emoteBubble = createTextSprite(text);
+      this.emoteBubble.position.set(0, 3.4, 0);
+      this.emoteBubble.scale.set(3.2, 0.75, 1);
+      this.emoteBubble.visible = true;
+      this.group.add(this.emoteBubble);
+      this.emoteTimer = 4.5;
+    }
+
+    update(dt) {
+      // Smooth lerp interpolation for buttery smooth movement
+      const lerpFactor = Math.min(1.0, 14 * dt);
+      this.x += (this.targetX - this.x) * lerpFactor;
+      this.z += (this.targetZ - this.z) * lerpFactor;
+      this.y += (this.targetY - this.y) * lerpFactor;
+
+      // Angle shortest rotation interpolation
+      let angleDiff = this.targetAngle - this.angle;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      this.angle += angleDiff * lerpFactor;
+
+      this.group.position.set(this.x, this.y, this.z);
+
+      if (this.isDriving) {
+        this.tractorGroup.visible = true;
+        this.group.rotation.y = this.angle;
+        this.charMeshGroup.position.set(0, 1.0, -0.4);
+        this.leftHip.rotation.x = -Math.PI / 3;
+        this.rightHip.rotation.x = -Math.PI / 3;
+        this.leftShoulder.rotation.x = -Math.PI / 4;
+        this.rightShoulder.rotation.x = -Math.PI / 4;
+      } else {
+        this.tractorGroup.visible = false;
+        this.charMeshGroup.position.set(0, 0, 0);
+        this.group.rotation.y = this.angle + Math.PI;
+
+        if (this.isWalking) {
+          this.walkAnimTime += dt * (this.isShift ? 14 : 9);
+          const swing = Math.sin(this.walkAnimTime) * 0.55;
+          this.leftHip.rotation.x = swing;
+          this.rightHip.rotation.x = -swing;
+          this.leftShoulder.rotation.x = -swing * 0.8;
+          if (!this.isSwinging) this.rightShoulder.rotation.x = swing * 0.8;
+        } else {
+          this.leftHip.rotation.x = 0;
+          this.rightHip.rotation.x = 0;
+          this.leftShoulder.rotation.x = 0;
+          if (!this.isSwinging) this.rightShoulder.rotation.x = 0;
+        }
+
+        if (this.isSwinging) {
+          this.swingTime += dt * 6;
+          this.rightShoulder.rotation.x = -Math.sin(this.swingTime) * 1.5;
+          if (this.swingTime > Math.PI) {
+            this.isSwinging = false;
+            this.swingTime = 0;
+            this.rightShoulder.rotation.x = 0;
+          }
+        }
+      }
+
+      // Emote bubble lifetime
+      if (this.emoteTimer > 0) {
+        this.emoteTimer -= dt;
+        if (this.emoteTimer <= 0) {
+          this.emoteBubble.visible = false;
+        }
+      }
+    }
+
+    destroy() {
+      scene.remove(this.group);
+    }
   }
 
   class PlayerFarmer3D {
@@ -2696,6 +3066,316 @@
   }
 
 
+
+  // =========================================================
+  // MULTIPLAYER NETWORKING MANAGER (P2P WebRTC via PeerJS)
+  // =========================================================
+  const mpManager = {
+    role: 'single', // 'single' | 'host' | 'guest'
+    peer: null,
+    conn: null,
+    roomId: null,
+    connected: false,
+    remoteFarmer: null,
+    sendTimer: 0,
+
+    initHost() {
+      if (this.peer) this.disconnect();
+
+      const randCode = Math.floor(100 + Math.random() * 900);
+      this.roomId = 'AGRO-' + randCode;
+      this.role = 'host';
+
+      this.setStatus('waiting', `Создание комнаты ${this.roomId}...`);
+
+      try {
+        this.peer = new Peer(this.roomId, {
+          debug: 1,
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:global.stun.twilio.com:3478' }
+            ]
+          }
+        });
+
+        this.peer.on('open', (id) => {
+          this.roomId = id;
+          this.setStatus('waiting', `Ожидание друга... Код: ${id}`);
+          if (hud.mpHostInfo) hud.mpHostInfo.style.display = 'block';
+          if (hud.mpRoomCode) hud.mpRoomCode.innerText = id;
+          if (hud.mpMyRole) hud.mpMyRole.innerText = 'Хост (Усадьба 1)';
+          if (hud.mpActiveSection) hud.mpActiveSection.style.display = 'block';
+          if (hud.quickEmoteBar) hud.quickEmoteBar.style.display = 'flex';
+          showFloat(`Комната ${id} создана! Скопируйте ссылку для друга.`, window.innerWidth / 2, 80, '#00e676');
+        });
+
+        this.peer.on('connection', (connection) => {
+          this.conn = connection;
+          this.setupConnectionHandlers();
+        });
+
+        this.peer.on('error', (err) => {
+          console.warn('Peer error:', err);
+          this.setStatus('disconnected', 'Ошибка: ' + (err.type || 'не удалось создать сервер'));
+          showFloat('Ошибка P2P соединения', window.innerWidth / 2, 80, '#e53935');
+        });
+      } catch (err) {
+        console.error(err);
+        this.setStatus('disconnected', 'Ошибка инициализации WebRTC');
+      }
+    },
+
+    joinRoom(targetRoomId) {
+      if (!targetRoomId || targetRoomId.trim().length === 0) {
+        showFloat('Введите код комнаты!', window.innerWidth / 2, 80, '#e53935');
+        return;
+      }
+      targetRoomId = targetRoomId.trim().toUpperCase();
+      if (this.peer) this.disconnect();
+
+      this.role = 'guest';
+      this.roomId = targetRoomId;
+      this.setStatus('waiting', `Подключение к ${targetRoomId}...`);
+
+      try {
+        this.peer = new Peer({
+          debug: 1,
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:global.stun.twilio.com:3478' }
+            ]
+          }
+        });
+
+        this.peer.on('open', () => {
+          this.conn = this.peer.connect(targetRoomId, { reliable: true });
+          this.setupConnectionHandlers();
+        });
+
+        this.peer.on('error', (err) => {
+          console.warn('Peer error:', err);
+          this.setStatus('disconnected', 'Не удалось найти комнату ' + targetRoomId);
+          showFloat('Комната не найдена или занята', window.innerWidth / 2, 80, '#e53935');
+        });
+      } catch (err) {
+        console.error(err);
+        this.setStatus('disconnected', 'Ошибка WebRTC');
+      }
+    },
+
+    setupConnectionHandlers() {
+      if (!this.conn) return;
+
+      this.conn.on('open', () => {
+        this.connected = true;
+        this.setStatus('connected', `🟢 Онлайн! Связь с другом установлена (${this.roomId})`);
+        if (hud.mpActiveSection) hud.mpActiveSection.style.display = 'block';
+        if (hud.quickEmoteBar) hud.quickEmoteBar.style.display = 'flex';
+
+        // Unlock Plot 8 (Friend's Farm)
+        PLOTS[8].owned = true;
+        for (let r = PLOTS[8].minR; r <= PLOTS[8].maxR; r++) {
+          for (let c = PLOTS[8].minC; c <= PLOTS[8].maxC; c++) {
+            updateTileAppearance(c, r);
+          }
+        }
+
+        // Spawn remote player
+        if (!this.remoteFarmer) {
+          const spawnX = this.role === 'host' ? 122 : 12;
+          const spawnZ = this.role === 'host' ? 135 : 18;
+          this.remoteFarmer = new RemotePlayerFarmer3D(spawnX, spawnZ);
+        }
+
+        if (this.role === 'guest') {
+          if (hud.mpMyRole) hud.mpMyRole.innerText = 'Гость (Усадьба 2)';
+          // Teleport local player to Friend's Farmstead
+          playerFarmer.x = 122;
+          playerFarmer.z = 135;
+          playerFarmer.angle = Math.PI;
+          controls.target.set(122, 0, 135);
+          camera.position.set(122 + 20, 30, 135 + 24);
+          controls.update();
+          showFloat('🏡 Вы прибыли на ферму друга (Юго-Восток)!', window.innerWidth / 2, 80, '#00e676');
+        } else {
+          // Host sends world snapshot to guest
+          this.sendWorldSync();
+          showFloat('🎉 Друг подключился! Его усадьба готова на другом конце карты!', window.innerWidth / 2, 80, '#00e676');
+        }
+      });
+
+      this.conn.on('data', (data) => {
+        this.handleMessage(data);
+      });
+
+      this.conn.on('close', () => {
+        this.handlePeerDisconnected();
+      });
+    },
+
+    sendWorldSync() {
+      if (!this.conn || !this.connected) return;
+      const snapshot = [];
+      for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+          const t = grid[r][c];
+          if (t.soil !== 'grass' || t.crop) {
+            snapshot.push({
+              c: c,
+              r: r,
+              soil: t.soil,
+              moisture: t.moisture,
+              crop: t.crop ? { type: t.crop.type, progress: t.crop.progress, mature: t.crop.mature } : null,
+              fertilized: t.fertilized
+            });
+          }
+        }
+      }
+      this.conn.send({
+        type: 'world_sync',
+        day: farm.day,
+        weather: farm.weather,
+        tiles: snapshot
+      });
+    },
+
+    broadcastTileUpdate(c, r, soil, moisture, crop, fertilized) {
+      if (!this.conn || !this.connected) return;
+      this.conn.send({
+        type: 'tile_update',
+        c: c,
+        r: r,
+        soil: soil,
+        moisture: moisture,
+        crop: crop,
+        fertilized: fertilized
+      });
+    },
+
+    broadcastEmote(text) {
+      if (playerFarmer) {
+        showFloat(`Вы: ${text}`, window.innerWidth / 2, 80, '#38bdf8');
+      }
+      if (this.conn && this.connected) {
+        this.conn.send({ type: 'emote', text: text });
+      }
+    },
+
+    handleMessage(data) {
+      if (!data) return;
+
+      if (data.type === 'player_state') {
+        if (this.remoteFarmer) {
+          this.remoteFarmer.setTargetState(data);
+        }
+      } else if (data.type === 'tile_update') {
+        const t = grid[data.r][data.c];
+        if (t) {
+          t.soil = data.soil;
+          t.moisture = data.moisture;
+          t.crop = data.crop;
+          t.fertilized = data.fertilized;
+          updateTileAppearance(data.c, data.r);
+          spawn3DParticles(data.c * TILE_SIZE + 1.5, 0.4, data.r * TILE_SIZE + 1.5, 0x4caf50, 6);
+        }
+      } else if (data.type === 'world_sync') {
+        farm.day = data.day;
+        farm.weather = data.weather;
+        if (hud.day) hud.day.innerText = `День ${farm.day}, Весна`;
+        if (hud.weatherText) hud.weatherText.innerText = farm.weather === 'sunny' ? 'Солнечно' : 'Дождь';
+
+        data.tiles.forEach(item => {
+          const t = grid[item.r][item.c];
+          if (t) {
+            t.soil = item.soil;
+            t.moisture = item.moisture;
+            t.crop = item.crop;
+            t.fertilized = item.fertilized;
+            updateTileAppearance(item.c, item.r);
+          }
+        });
+      } else if (data.type === 'emote') {
+        if (this.remoteFarmer) {
+          this.remoteFarmer.showEmote(data.text);
+        }
+        showFloat(`👨‍🌾 Друг: ${data.text}`, window.innerWidth / 2, 90, '#34d399');
+      }
+    },
+
+    handlePeerDisconnected() {
+      this.connected = false;
+      this.setStatus('waiting', 'Друг отключился. Ожидание повторного входа...');
+      if (this.remoteFarmer) {
+        this.remoteFarmer.destroy();
+        this.remoteFarmer = null;
+      }
+      showFloat('Друг покинул ферму', window.innerWidth / 2, 80, '#fbbf24');
+    },
+
+    disconnect() {
+      if (this.conn) {
+        try { this.conn.close(); } catch(e) {}
+        this.conn = null;
+      }
+      if (this.peer) {
+        try { this.peer.destroy(); } catch(e) {}
+        this.peer = null;
+      }
+      if (this.remoteFarmer) {
+        this.remoteFarmer.destroy();
+        this.remoteFarmer = null;
+      }
+      this.connected = false;
+      this.role = 'single';
+      this.setStatus('disconnected', 'Одиночный режим (Не подключено)');
+      if (hud.mpActiveSection) hud.mpActiveSection.style.display = 'none';
+      if (hud.mpHostInfo) hud.mpHostInfo.style.display = 'none';
+      if (hud.quickEmoteBar) hud.quickEmoteBar.style.display = 'none';
+    },
+
+    setStatus(stateClass, text) {
+      if (hud.mpStatusBanner) {
+        hud.mpStatusBanner.className = `mp-status-box ${stateClass}`;
+      }
+      if (hud.mpStatusText) {
+        hud.mpStatusText.innerText = text;
+      }
+    },
+
+    tick(dt) {
+      if (this.remoteFarmer) {
+        this.remoteFarmer.update(dt);
+      }
+
+      if (!this.connected || !this.conn) return;
+
+      this.sendTimer += dt;
+      // Broadcast player state at 18 Hz
+      if (this.sendTimer > 0.055) {
+        this.sendTimer = 0;
+        const v = farm.drivingVehicle;
+        this.conn.send({
+          type: 'player_state',
+          x: playerFarmer.x,
+          y: playerFarmer.y || 0,
+          z: playerFarmer.z,
+          yaw: fpsControls.yaw,
+          isWalking: playerFarmer.isWalking,
+          isShift: keys['shift'] || touchInput.isSprinting,
+          isSwinging: playerFarmer.isSwinging,
+          activeTool: farm.activeTool,
+          isDriving: !!v,
+          vehX: v ? v.x : 0,
+          vehZ: v ? v.z : 0,
+          vehAngle: v ? v.angle : 0,
+          vehSpeed: v ? v.speed : 0
+        });
+      }
+    }
+  };
+
   // --- MODAL DIALOGS & ECONOMY HANDLERS ---
   function openModal(el) { if(farm.viewMode==='FPS') document.exitPointerLock();  el.style.display = 'flex'; }
   function closeModal(el) { if(farm.viewMode==='FPS') canvas.requestPointerLock();  el.style.display = 'none'; }
@@ -3607,7 +4287,8 @@
             farm.money -= cost;
             farm.warehouse.capacity += bonus;
             farm.warehouse.upgradeLevel++;
-            buildFarmstead(); // Regenerate 3D farm buildings with new silos!
+            buildFarmstead();
+  buildFriendFarmstead(); // Regenerate 3D farm buildings with new silos!
             showFloat(`ЭЛЕВАТОР РАСШИРЕН: +${bonus} КГ!`, window.innerWidth / 2, 80, '#2e7d32');
             updateWarehouseUI();
           }
@@ -3894,6 +4575,9 @@
     // Update Workers
     activeWorkerBots.forEach(w => w.update(dt));
 
+    // Update Multiplayer Network
+    if (typeof mpManager !== 'undefined') mpManager.tick(dt);
+
     // Update 3D Particles
     for (let i = particles3D.length - 1; i >= 0; i--) {
       particles3D[i].update(dt);
@@ -3999,3 +4683,68 @@
 
   console.log('AgroTycoon 3D Engine running with Three.js WebGL and RTX soft shadows.');
 })();
+
+
+  // --- MULTIPLAYER UI EVENT LISTENERS ---
+  if (hud.btnNavMultiplayer) {
+    hud.btnNavMultiplayer.addEventListener('click', () => {
+      openModal(hud.modalMultiplayer);
+    });
+  }
+
+  if (hud.btnMpCreate) {
+    hud.btnMpCreate.addEventListener('click', () => {
+      mpManager.initHost();
+    });
+  }
+
+  if (hud.btnMpJoin) {
+    hud.btnMpJoin.addEventListener('click', () => {
+      const codeVal = hud.inputRoomCode ? hud.inputRoomCode.value : '';
+      mpManager.joinRoom(codeVal);
+    });
+  }
+
+  if (hud.btnMpDisconnect) {
+    hud.btnMpDisconnect.addEventListener('click', () => {
+      mpManager.disconnect();
+    });
+  }
+
+  if (hud.btnCopyCode) {
+    hud.btnCopyCode.addEventListener('click', () => {
+      if (mpManager.roomId) {
+        navigator.clipboard.writeText(mpManager.roomId);
+        showFloat(`Код ${mpManager.roomId} скопирован!`, window.innerWidth / 2, 80);
+      }
+    });
+  }
+
+  if (hud.btnCopyLink) {
+    hud.btnCopyLink.addEventListener('click', () => {
+      if (mpManager.roomId) {
+        const link = window.location.origin + window.location.pathname + '?room=' + mpManager.roomId;
+        navigator.clipboard.writeText(link);
+        showFloat('🔗 Ссылка скопирована в буфер обмена!', window.innerWidth / 2, 80, '#00e676');
+      }
+    });
+  }
+
+  // Emotes buttons (inside modal and in floating quick bar)
+  document.querySelectorAll('.emote-btn, .quick-emote-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const emote = btn.dataset.emote;
+      if (emote) mpManager.broadcastEmote(emote);
+    });
+  });
+
+  // Auto-connect if URL has ?room= parameter
+  window.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) {
+      if (hud.inputRoomCode) hud.inputRoomCode.value = roomParam;
+      openModal(hud.modalMultiplayer);
+      setTimeout(() => mpManager.joinRoom(roomParam), 800);
+    }
+  });
